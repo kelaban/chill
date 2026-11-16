@@ -72,6 +72,14 @@ export interface PutioFile {
   contentType?: string;
 }
 
+export interface PutioSubtitle {
+  key: string;
+  /** Language name or code as put.io reports it (e.g. "English", "eng"). */
+  language: string | null;
+  name: string;
+  source: string; // folder, mkv, opensubtitles
+}
+
 export interface PutioApi {
   ensureFolder(name: string): Promise<number>;
   addTransfer(url: string, parentId: number): Promise<PutioTransfer>;
@@ -82,6 +90,10 @@ export interface PutioApi {
   /** A short-lived URL for the original file (bound to the requesting IP). */
   downloadUrl(fileId: number): Promise<string>;
   deleteFiles(ids: number[]): Promise<void>;
+  /** put.io's subtitles for a video: sidecars in its folder, tracks in the MKV, OpenSubtitles. */
+  subtitles(fileId: number): Promise<PutioSubtitle[]>;
+  /** One subtitle's text (server-side; the token never reaches the player). */
+  subtitleText(fileId: number, key: string, format: "webvtt" | "srt"): Promise<string>;
   accountDisk(): Promise<{ size: number; used: number; avail: number }>;
 }
 

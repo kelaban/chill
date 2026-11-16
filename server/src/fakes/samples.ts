@@ -20,7 +20,8 @@ export interface Samples {
 
 export async function ensureSamples(dir: string, seconds = SAMPLE_SECONDS): Promise<Samples> {
   fs.mkdirSync(dir, { recursive: true });
-  const out = { instant: path.join(dir, `instant-${seconds}.mp4`), target: path.join(dir, `target-${seconds}.mp4`), instantEac3: path.join(dir, `instant-eac3-${seconds}.mkv`) };
+  // v2: the target copy carries an embedded English subtitle track (mov_text).
+  const out = { instant: path.join(dir, `instant-${seconds}.mp4`), target: path.join(dir, `target-v2-${seconds}.mp4`), instantEac3: path.join(dir, `instant-eac3-${seconds}.mkv`) };
   if (fs.existsSync(out.instant) && fs.existsSync(out.target) && fs.existsSync(out.instantEac3)) return out;
 
   const film = path.join(dir, "film.wav");
@@ -41,15 +42,41 @@ export async function ensureSamples(dir: string, seconds = SAMPLE_SECONDS): Prom
 
   await runProcess("ffmpeg", ["-y", "-v", "error", "-f", "lavfi", "-i", pattern(640, 360, "INSTANT 360p"), "-i", film, "-shortest", ...enc, "-b:v", "500k", out.instant]);
 
+  const embedded = path.join(dir, "embedded-en.srt");
+  fs.writeFileSync(embedded, sampleSubtitles("en", seconds, TARGET_LEAD_IN_S, "srt", "EMBEDDED"));
   await runProcess("ffmpeg", [
     "-y", "-v", "error",
     "-f", "lavfi", "-i", `color=c=black:size=1280x720:rate=24:duration=${TARGET_LEAD_IN_S}`,
     "-f", "lavfi", "-i", pattern(1280, 720, "TARGET 720p"),
-    "-i", lead, "-i", film,
+    "-i", lead, "-i", film, "-i", embedded,
     "-filter_complex", "[0:v][2:a][1:v][3:a]concat=n=2:v=1:a=1[v][a]",
-    "-map", "[v]", "-map", "[a]", ...enc, "-b:v", "1500k", out.target,
+    "-map", "[v]", "-map", "[a]", "-map", "4:s", ...enc, "-b:v", "1500k",
+    "-c:s", "mov_text", "-metadata:s:s:0", "language=eng", out.target,
   ]);
   // Same picture, E-AC3 5.1 audio in MKV.
   await runProcess("ffmpeg", ["-y", "-v", "error", "-i", out.instant, "-map", "0:v", "-map", "0:a", "-c:v", "copy", "-c:a", "eac3", "-ac", "6", "-b:a", "384k", out.instantEac3]);
   return out;
+}
+
+/**
+ * Subtitles for the generated film: a cue every 4 s naming the film time, so a
+ * test (or a person) can see they're in sync. `leadIn` shifts them onto a copy
+ * whose timeline starts later (the target copy's 2.5 s lead-in).
+ */
+export function sampleSubtitles(lang: string, seconds: number, leadIn = 0, format: "srt" | "webvtt" = "srt", tag = ""): string {
+  const ts = (t: number, sep: string) => {
+    const ms = Math.round(t * 1000);
+    const h = Math.floor(ms / 3_600_000), m = Math.floor((ms % 3_600_000) / 60_000), s = Math.floor((ms % 60_000) / 1000);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}${sep}${String(ms % 1000).padStart(3, "0")}`;
+  };
+  const words: Record<string, string> = { en: "Line", es: "Línea", ko: "줄" };
+  const out: string[] = format === "webvtt" ? ["WEBVTT", ""] : [];
+  let n = 1;
+  for (let t = 1; t + 3 <= seconds; t += 4, n++) {
+    const film = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+    const sep = format === "webvtt" ? "." : ",";
+    if (format === "srt") out.push(String(n));
+    out.push(`${ts(t + leadIn, sep)} --> ${ts(t + 3 + leadIn, sep)}`, `${tag ? `${tag} ` : ""}[${lang.toUpperCase()}] ${words[lang] ?? "Line"} ${n} · ${film}`, "");
+  }
+  return out.join("\n");
 }

@@ -33,7 +33,24 @@ export interface Probe {
   width: number | null;
   height: number | null;
   dynamicRange: DynamicRange;
+  audioChannels: number | null;
+  /** Subtitle streams, in order (`index` is N in `-map 0:s:N`). */
+  subtitles: ProbeSubtitle[];
 }
+
+export interface ProbeSubtitle {
+  index: number;
+  codec: string;
+  /** Text tracks can become WebVTT; image tracks (PGS, VobSub) can't. */
+  text: boolean;
+  language: string | null;
+  title: string | null;
+  forced: boolean;
+  sdh: boolean;
+  default: boolean;
+}
+
+const TEXT_SUB_CODECS = new Set(["subrip", "srt", "ass", "ssa", "mov_text", "webvtt", "text", "tx3g"]);
 
 export async function probe(input: string): Promise<Probe> {
   const { stdout } = await run("ffprobe", ["-v", "error", "-print_format", "json", "-show_format", "-show_streams", input], { timeoutMs: 60_000 });
@@ -42,6 +59,7 @@ export async function probe(input: string): Promise<Probe> {
   const a = j.streams?.find((s) => s.codec_type === "audio");
   const dovi = (v?.side_data_list ?? []).some((s: any) => String(s.side_data_type).includes("DOVI"));
   const pq = v?.color_transfer === "smpte2084";
+  const subs = (j.streams ?? []).filter((s) => s.codec_type === "subtitle");
   return {
     durationS: j.format?.duration ? Number(j.format.duration) : null,
     container: j.format?.format_name ?? null,
@@ -50,6 +68,21 @@ export async function probe(input: string): Promise<Probe> {
     width: v?.width ?? null,
     height: v?.height ?? null,
     dynamicRange: dovi ? "DV" : pq ? "HDR10" : "SDR",
+    audioChannels: a?.channels ?? null,
+    subtitles: subs.map((s, index) => {
+      const title: string | null = s.tags?.title ?? null;
+      const t = (title ?? "").toLowerCase();
+      return {
+        index,
+        codec: String(s.codec_name ?? "unknown"),
+        text: TEXT_SUB_CODECS.has(String(s.codec_name)),
+        language: s.tags?.language ?? null,
+        title,
+        forced: s.disposition?.forced === 1 || t.includes("forced"),
+        sdh: s.disposition?.hearing_impaired === 1 || /\bsdh\b|hearing/.test(t),
+        default: s.disposition?.default === 1,
+      };
+    }),
   };
 }
 
@@ -87,6 +120,12 @@ export async function detectCuts(input: string, startS: number, durS: number, th
   const scenes = [...stderr.matchAll(/lavfi\.scd\.time=([\d.]+)/g)].map((m) => base + Number(m[1]));
   const black = [...stderr.matchAll(/black_start:([\d.]+)\s+black_end:([\d.]+)/g)].map((m) => ({ start: base + Number(m[1]), end: base + Number(m[2]) }));
   return { scenes: [...new Set(scenes.map((s) => Math.round(s * 1000) / 1000))].sort((a, b) => a - b), black };
+}
+
+/** One text subtitle stream as WebVTT (reads the whole file: use on local copies). */
+export async function extractSubtitle(input: string, index: number): Promise<string> {
+  const { stdout } = await run("ffmpeg", ["-v", "error", "-nostdin", "-i", input, "-map", `0:s:${index}`, "-f", "webvtt", "pipe:1"], { timeoutMs: 600_000 });
+  return stdout.toString("utf8");
 }
 
 export async function hasFfmpeg(): Promise<boolean> {

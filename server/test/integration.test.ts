@@ -265,3 +265,69 @@ describe("the home library is a cache of what's on now", () => {
     expect(ids).not.toContain(FAKE_NO_RELEASES_ID); // that Play failed
   });
 });
+
+describe("subtitles", () => {
+  const PARASITE = 496243;
+  type Stream = NonNullable<PlayStatus["stream"]>;
+  const stream = async (id: number) => (await api<PlayStatus>("GET", `/api/titles/${id}/play`)).stream as Stream;
+
+  it("a Korean film starts with English on; its put.io copy lists put.io's tracks", async () => {
+    await api("POST", `/api/titles/${PARASITE}/play`);
+    await advance(10_000);
+    const s = await stream(PARASITE);
+    expect(s.subtitles.map((t) => t.language).sort()).toEqual(["en", "es"]);
+    const en = s.subtitles.find((t) => t.language === "en")!;
+    expect(s.subtitleId).toBe(en.id);
+    const vtt = await (await fetch(base + en.url)).text();
+    expect(vtt.startsWith("WEBVTT")).toBe(true);
+    expect(vtt).toContain("00:00:01.000 --> 00:00:04.000\n[EN] Line 1 · 0:01");
+  });
+
+  it("shifts cues for a compat stream that starts mid-film", async () => {
+    const s = await stream(PARASITE);
+    const en = s.subtitles.find((t) => t.language === "en")!;
+    const vtt = await (await fetch(`${base}${en.url}?shift=-30`)).text();
+    // Film 29–32 s → 0 (clamped) to 2 s on the compat clock.
+    expect(vtt.split("\n").slice(2, 4)).toEqual(["00:00:00.000 --> 00:00:02.000", "[EN] Line 8 · 0:29"]);
+  });
+
+  it("an English film starts with none; its home copy kept put.io's English as a Plex-style sidecar", async () => {
+    await api("POST", `/api/titles/${HEAT}/play`);
+    await advance(40_000); // fast copy, 4K copy, then the copy home
+    const s = await stream(HEAT);
+    expect(s.label).toContain("Home");
+    expect(s.subtitleId).toBeNull();
+    expect(s.subtitles.map((t) => t.label)).toEqual(["English"]); // es not saved (not wanted); embedded en duplicates the sidecar
+    const local = ctx.db.prepare("SELECT local_path FROM variants WHERE tmdb_id = ? AND location = 'local'").pluck().get(HEAT) as string;
+    // Replaying a cleaned-up title still upgrades to 4K (regression: the "same
+    // release as last time" preference used to pin the upgrade to the 1080p copy).
+    expect(local).toMatch(/2160p\.mp4$/);
+    expect(fs.existsSync(path.join(ctx.cfg.libraryDir, local.replace(/\.mp4$/, ".en.srt")))).toBe(true);
+    const vtt = await (await fetch(base + s.subtitles[0]!.url)).text();
+    // The home copy is the 4K one: its subtitles are in its own timeline (1 s + 2.5 s lead-in).
+    expect(vtt).toContain("00:00:03.500 --> 00:00:06.500\n[EN] Line 1 · 0:01");
+  });
+
+  it("extracts subtitle tracks embedded in a file", async () => {
+    const { extractSubtitle, probe } = await import("../src/media/ffmpeg.js");
+    const samples = await ensureSamples(SAMPLES_DIR, 60);
+    const p = await probe(samples.target);
+    expect(p.subtitles).toMatchObject([{ index: 0, codec: "mov_text", text: true, language: "eng" }]);
+    expect(await extractSubtitle(samples.target, 0)).toContain("EMBEDDED [EN] Line 1 · 0:01");
+  });
+
+  it("remembers a choice per title, including off", async () => {
+    await api("POST", `/api/titles/${HEAT}/subtitle`, { language: "en" });
+    const heat = await stream(HEAT);
+    expect(heat.subtitleId).toBe(heat.subtitles[0]!.id);
+    await api("POST", `/api/titles/${PARASITE}/subtitle`, { language: null });
+    expect((await stream(PARASITE)).subtitleId).toBeNull();
+  });
+
+  it("deleting a home copy deletes its sidecars and subtitle records", async () => {
+    const v = ctx.db.prepare("SELECT id, local_path FROM variants WHERE tmdb_id = ? AND location = 'local'").get(HEAT) as { id: string; local_path: string };
+    await api("POST", `/api/variants/${v.id}/evict`);
+    expect(fs.existsSync(path.join(ctx.cfg.libraryDir, v.local_path.replace(/\.mp4$/, ".en.srt")))).toBe(false);
+    expect(ctx.db.prepare("SELECT COUNT(*) FROM subtitles WHERE variant_id = ?").pluck().get(v.id)).toBe(0);
+  });
+});

@@ -86,14 +86,15 @@ export async function ensureTitle(ctx: Ctx, tmdbId: number): Promise<{ facts: Ti
   const year = yearOf(detail.release_date);
   ctx.db
     .prepare(
-      `INSERT INTO titles (tmdb_id, imdb_id, title, original_title, year, runtime_min, poster_path, backdrop_path, json, fetched_at)
-       VALUES (@id, @imdb, @title, @orig, @year, @runtime, @poster, @backdrop, @json, @now)
+      `INSERT INTO titles (tmdb_id, imdb_id, title, original_title, year, runtime_min, poster_path, backdrop_path, json, fetched_at, original_language)
+       VALUES (@id, @imdb, @title, @orig, @year, @runtime, @poster, @backdrop, @json, @now, @lang)
        ON CONFLICT(tmdb_id) DO UPDATE SET imdb_id=@imdb, title=@title, original_title=@orig, year=@year, runtime_min=@runtime,
-         poster_path=@poster, backdrop_path=@backdrop, json=@json, fetched_at=@now`,
+         poster_path=@poster, backdrop_path=@backdrop, json=@json, fetched_at=@now, original_language=@lang`,
     )
     .run({
       id: tmdbId, imdb: detail.imdb_id, title: detail.title, orig: detail.original_title ?? null, year, runtime: detail.runtime,
       poster: detail.poster_path, backdrop: detail.backdrop_path, json: JSON.stringify(toSummary(detail)), now: ctx.clock.now(),
+      lang: detail.original_language ?? null,
     });
   return { facts: { title: detail.title, originalTitle: detail.original_title, year, imdbId: detail.imdb_id, runtimeMin: detail.runtime, originalLanguage: detail.original_language ?? null }, detail };
 }

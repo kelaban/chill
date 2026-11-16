@@ -8,6 +8,7 @@ import { PermanentError } from "../jobs.js";
 import { log } from "../log.js";
 import { ensureTitle, watchState } from "./catalog.js";
 import { deviceCaps, qualityProfile, ranking, releaseById } from "./releases.js";
+import { defaultSubtitle, discover as discoverSubtitles, tracksFor } from "./subtitles.js";
 import { admitAndMakeRoom, clearLocalCache, isPlaying, publishStorage, variant, variantsFor, type VariantRow } from "./storage.js";
 
 export interface AcqRow {
@@ -52,6 +53,8 @@ const toPlayable = (v: VariantRow): PlayableVariant => ({
 });
 
 export function streamInfo(ctx: Ctx, v: VariantRow, profileId: number): StreamInfo {
+  // Copies from before subtitles existed (or whose check failed) get looked at in the background.
+  if (!v.subs_checked_at) ctx.jobs.enqueue("subtitles.discover", { variantId: v.id }, { dedupeKey: `subs:${v.id}` });
   const ws = watchState(ctx, profileId, v.tmdb_id);
   let startAtS = 0;
   if (ws && !ws.watched && ws.position_s > 30) {
@@ -72,6 +75,9 @@ export function streamInfo(ctx: Ctx, v: VariantRow, profileId: number): StreamIn
     audioCodec: normalizeCodec(v.audio_codec),
     videoCodec: normalizeCodec(v.video_codec),
     container: normalizeContainer(v.container),
+    audioChannels: v.probe_json ? ((JSON.parse(v.probe_json) as { audioChannels?: number | null }).audioChannels ?? null) : null,
+    subtitles: tracksFor(ctx, v.id),
+    subtitleId: defaultSubtitle(ctx, profileId, v),
   };
 }
 
@@ -106,14 +112,15 @@ export function playStatus(ctx: Ctx, tmdbId: number, profileId: number): PlaySta
   const a = ctx.db
     .prepare(`SELECT * FROM acquisitions WHERE tmdb_id = ? AND tier = 'instant' ORDER BY (state IN ${ACTIVE}) DESC, (races IS NULL) DESC, id DESC LIMIT 1`)
     .get(tmdbId) as AcqRow | undefined;
-  if (!a || a.state === "cancelled" || (a.state === "failed" && ctx.clock.now() - a.updated_at > 10 * 60_000)) return { tmdbId, phase: "idle" };
+  // A finished acquisition whose copies have since been cleaned up is just idle (Play fetches again).
+  if (!a || a.state === "cancelled" || a.state === "ready" || (a.state === "failed" && ctx.clock.now() - a.updated_at > 10 * 60_000)) return { tmdbId, phase: "idle" };
   // When a race is on, report whichever transfer is ahead.
   const racers = ctx.db.prepare(`SELECT * FROM acquisitions WHERE (id = ? OR races = ?) AND state IN ${ACTIVE}`).all(a.id, a.id) as AcqRow[];
   const lead = racers.sort((x, y) => (y.percent ?? 0) - (x.percent ?? 0))[0] ?? a;
   const rel = lead.release_id ? releaseById(ctx, tmdbId, lead.release_id) : null;
   return {
     tmdbId,
-    phase: a.state === "ready" ? "transferring" : a.state,
+    phase: a.state,
     percent: lead.percent ?? undefined,
     etaSeconds: lead.eta_s,
     releaseLabel: rel ? releaseLabel(rel) : undefined,
@@ -184,7 +191,11 @@ async function preferredFor(ctx: Ctx, tmdbId: number) {
 async function planTarget(ctx: Ctx, tmdbId: number, instantPick: Scored | null) {
   const exists = ctx.db.prepare(`SELECT 1 FROM acquisitions WHERE tmdb_id = ? AND tier = 'target' AND state IN ${ACTIVE}`).get(tmdbId);
   if (exists) return;
-  const r = await ranking(ctx, tmdbId, await preferredFor(ctx, tmdbId));
+  // Prefer the same edition (so resume positions line up), but never "the same
+  // release": that bonus is for the fast copy, and here it would pin the upgrade
+  // to the 1080p copy watched last time.
+  const prefer = await preferredFor(ctx, tmdbId);
+  const r = await ranking(ctx, tmdbId, prefer ? { edition: prefer.edition } : undefined);
   const excluded = excludedReleases(ctx, tmdbId);
   const target = r.target.find((s) => !excluded.has(s.release.id));
   if (!target) return;
@@ -311,6 +322,7 @@ export function registerAcquireJobs(ctx: Ctx) {
     } catch (err) {
       log.warn("probe before ready failed", { variant: vid, err });
     }
+    await discoverSubtitles(ctx, variant(ctx, vid)!).catch((err) => log.warn("subtitle discovery failed", { variant: vid, err }));
     update(ctx, acqId, { state: "ready", putio_file_id: file.id, percent: 100, eta_s: 0 });
     ctx.db.prepare("UPDATE acquisitions SET ready_at = ? WHERE id = ?").run(ctx.clock.now(), acqId);
     log.info("ready on put.io", { tmdbId: a.tmdb_id, tier: a.tier, variant: vid });

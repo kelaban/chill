@@ -1,4 +1,4 @@
-import type { HandoffMode, StreamInfo, UpgradeReady } from "@chill/shared";
+import type { HandoffMode, StreamInfo, SubtitleTrack, UpgradeReady } from "@chill/shared";
 
 // The playback engine behind the player: two stacked <video> elements so a
 // better copy can take over without anyone noticing (ARCHITECTURE.md →
@@ -21,6 +21,38 @@ export interface EngineEvents {
   onError?(err: MediaError | null, variantId: string): void;
   onEnded?(): void;
   onDebug?(msg: string): void;
+  /** The subtitle now showing changed (null = none). */
+  onSubtitle?(track: SubtitleTrack | null): void;
+  /** The cues on screen right now (text with <i>/<b>/<u> markup); [] = nothing to show. */
+  onCues?(cues: string[]): void;
+}
+
+/** What the viewer asked for, independent of which copy is playing. */
+export interface SubChoice {
+  language: string | null;
+  forced: boolean;
+  sdh: boolean;
+}
+
+/** A track plus the map from its copy's timeline to the playing copy's: t' = scale·t + shift. */
+interface ActiveSub {
+  track: SubtitleTrack;
+  scale: number;
+  shift: number;
+}
+
+/** Pure: the track on another copy equivalent to `choice` (same language and flags, then same language). */
+export function matchSub(choice: SubChoice, tracks: SubtitleTrack[]): SubtitleTrack | null {
+  return (
+    tracks.find((t) => t.language === choice.language && t.forced === choice.forced && t.sdh === choice.sdh) ??
+    tracks.find((t) => t.language === choice.language && t.forced === choice.forced) ??
+    null
+  );
+}
+
+/** Pure: the subtitle URL for an element whose clock is `offset` seconds behind film time. */
+export function subtitleUrl(sub: ActiveSub, offset: number): string {
+  return `${sub.track.url}?scale=${sub.scale}&shift=${(sub.shift - offset).toFixed(3)}`;
 }
 
 /** Pure: next cut at least `minLeadS` ahead. */
@@ -75,6 +107,10 @@ export class HandoffEngine {
   private offset = 0;
   private compat = false;
   private hls: { destroy(): void } | null = null;
+  private choice: SubChoice | null = null;
+  private sub: ActiveSub | null = null;
+  /** Subtitle prepared on the standby element for a switch in progress. */
+  private nextSub: ActiveSub | null | undefined = undefined;
 
   constructor(
     private container: HTMLElement,
@@ -151,6 +187,49 @@ export class HandoffEngine {
     rvfc(tick);
   }
 
+  /** Show `track` (one of the current copy's tracks), or none. Remembered across copy switches. */
+  setSubtitle(track: SubtitleTrack | null) {
+    this.choice = track ? { language: track.language, forced: track.forced, sdh: track.sdh } : null;
+    this.sub = track ? { track, scale: 1, shift: 0 } : null;
+    this.applySubtitle(this.active, this.sub, this.offset);
+    this.ev.onSubtitle?.(this.sub?.track ?? null);
+  }
+  get subtitle(): SubtitleTrack | null {
+    return this.sub?.track ?? null;
+  }
+
+  /** The subtitle to use on `stream`: its own matching track, else the current one mapped through the switch's alignment. */
+  private subFor(stream: StreamInfo, up?: UpgradeReady): ActiveSub | null {
+    if (!this.choice) return null;
+    const own = matchSub(this.choice, stream.subtitles ?? []);
+    if (own) return { track: own, scale: 1, shift: 0 };
+    if (up && this.sub) return { track: this.sub.track, scale: up.a * this.sub.scale, shift: up.a * this.sub.shift + up.b };
+    return null;
+  }
+
+  /**
+   * Attach a subtitle track to `el`. The browser parses and times the cues
+   * ("hidden" mode); the player draws them itself so it can size them for the
+   * TV and lift them above the controls.
+   */
+  private applySubtitle(el: HTMLVideoElement, sub: ActiveSub | null, offset: number) {
+    for (const t of Array.from(el.querySelectorAll("track"))) t.remove();
+    if (el === this.active) this.ev.onCues?.([]);
+    if (!sub) return;
+    const tr = document.createElement("track");
+    tr.kind = "subtitles";
+    tr.label = sub.track.label;
+    if (sub.track.language) tr.srclang = sub.track.language;
+    tr.src = subtitleUrl(sub, offset);
+    el.appendChild(tr);
+    tr.track.mode = "hidden";
+    tr.track.addEventListener("cuechange", () => {
+      if (el !== this.active) return;
+      const cues = Array.from(tr.track.activeCues ?? []) as VTTCue[];
+      this.ev.onCues?.(cues.map((c) => c.text));
+    });
+  }
+
   async load(stream: StreamInfo, startAtS: number, autoplay = true): Promise<void> {
     if (this.needsCompat(stream)) return this.loadCompat(stream, startAtS, autoplay);
     this.generation++;
@@ -168,6 +247,7 @@ export class HandoffEngine {
       await once(v, "seeked").catch(() => {});
     }
     this.trackFrames(v);
+    this.applySubtitle(v, this.sub, 0);
     if (autoplay) await v.play().catch(() => this.ev.onPlaying?.(false));
   }
 
@@ -195,6 +275,7 @@ export class HandoffEngine {
       await once(v, "seeked").catch(() => {});
     }
     this.ev.onDebug?.(`compat stream from ${start.toFixed(2)} s`);
+    this.applySubtitle(v, this.sub, start); // cue times shifted onto the compat clock
     if (autoplay) await v.play().catch(() => this.ev.onPlaying?.(false));
   }
 
@@ -225,6 +306,7 @@ export class HandoffEngine {
       await new Promise<void>((resolve) => h.once(Hls.Events.MANIFEST_PARSED, () => resolve()));
     }
     if (atS > 0) v.currentTime = atS;
+    this.applySubtitle(v, this.sub, 0);
     await v.play().catch(() => this.ev.onPlaying?.(false));
   }
 
@@ -337,6 +419,8 @@ export class HandoffEngine {
       const map = (t: number) => up.a * t + up.b;
       const prerollAt = c - PREROLL_S;
       await this.prepareStandby(up, map(prerollAt));
+      this.nextSub = this.subFor(up.to, up);
+      this.applySubtitle(this.standby, this.nextSub, 0);
       if (gen !== this.generation || this.active.currentTime > prerollAt) return false; // too late for this cut
       if (!(await this.waitFor(prerollAt, gen))) return false;
 
@@ -387,6 +471,9 @@ export class HandoffEngine {
       v.currentTime = at;
       await once(v, "seeked");
       await v.play();
+      this.sub = this.subFor(up.to, up);
+      this.applySubtitle(v, this.sub, 0);
+      this.ev.onSubtitle?.(this.sub?.track ?? null);
       this.stream = up.to;
       this.pending = null;
       this.ev.onSwitched?.({ mode: "black-segment", fromVariantId: up.fromVariantId, toVariantId: up.to.variantId, gapMs: 0, droppedFrames: 0, atS: c }, up.to);
@@ -407,13 +494,17 @@ export class HandoffEngine {
       const from = this.now();
       const at = up.a * from + up.b;
       if (this.needsCompat(up.to)) {
+        this.sub = this.subFor(up.to, up);
         await this.loadCompat(up.to, at, wasPlaying);
+        this.ev.onSubtitle?.(this.sub?.track ?? null);
         this.pending = null;
         this.naturalBreak = null;
         this.ev.onSwitched?.({ mode: "natural-break", fromVariantId: up.fromVariantId, toVariantId: up.to.variantId, gapMs: 0, droppedFrames: 0, atS: from }, up.to);
         return;
       }
       await this.prepareStandby(up, at);
+      this.nextSub = this.subFor(up.to, up);
+      this.applySubtitle(this.standby, this.nextSub, 0);
       const s = this.standby;
       s.muted = false;
       s.volume = 1;
@@ -438,17 +529,27 @@ export class HandoffEngine {
     this.ai = 1 - this.ai;
     const dropped = (this.active as HTMLVideoElement & { getVideoPlaybackQuality?: () => VideoPlaybackQuality }).getVideoPlaybackQuality?.().droppedVideoFrames ?? 0;
     old.pause();
+    for (const t of Array.from(old.querySelectorAll("track"))) t.remove();
     old.removeAttribute("src");
     old.load();
     this.stream = up.to;
     this.pending = null;
     this.naturalBreak = null;
+    if (this.nextSub !== undefined) {
+      this.sub = this.nextSub;
+      this.nextSub = undefined;
+      this.ev.onSubtitle?.(this.sub?.track ?? null);
+    }
+    const t = Array.from(this.active.textTracks).find((x) => x.mode === "hidden");
+    this.ev.onCues?.(Array.from(t?.activeCues ?? []).map((c) => (c as VTTCue).text));
     this.trackFrames(this.active);
     this.ev.onSwitched?.({ mode, fromVariantId: up.fromVariantId, toVariantId: up.to.variantId, gapMs: Math.round(gapMs * 10) / 10, droppedFrames: dropped, atS }, up.to);
   }
 
   private resetStandby() {
     const s = this.standby;
+    this.nextSub = undefined;
+    for (const t of Array.from(s.querySelectorAll("track"))) t.remove();
     s.pause();
     s.playbackRate = 1;
     this.hide(s);

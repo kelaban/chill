@@ -24,3 +24,6 @@
   Mode). Loses the seamless upgrade; keeps browse, Play and resume. Reference:
   chill-institute/chill-stremio (MIT).
 - **Trickplay thumbnails, subtitles picker, audio track picker** (Phase 4).
+- **Subtitles, round two:** OpenSubtitles lookup when a copy has no English track;
+  burn-in or OCR for image-only (PGS) subtitles; prefer releases that carry
+  English subtitles for foreign films; a per-profile subtitle language.

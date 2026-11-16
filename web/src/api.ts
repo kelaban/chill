@@ -45,6 +45,7 @@ export const api = {
   refreshUpgrade: (id: number, body: { fromVariantId: string; toVariantId: string; positionS: number }) => req("POST", `/api/titles/${id}/upgrade/refresh`, body),
   fallback: (variantId: string) => req<{ state: string; url?: string; kind?: "hls" }>("POST", `/api/variants/${variantId}/fallback`),
   addToList: (id: number) => req("POST", `/api/my-list/${id}`),
+  setSubtitle: (id: number, choice: { language: string | null; forced?: boolean; sdh?: boolean }) => req("POST", `/api/titles/${id}/subtitle`, choice),
   removeFromList: (id: number) => req("DELETE", `/api/my-list/${id}`),
   storage: () => req<StorageReport>("GET", "/api/storage"),
   pin: (variantId: string, pinned: boolean) => req("POST", `/api/variants/${variantId}/pin`, { pinned }),

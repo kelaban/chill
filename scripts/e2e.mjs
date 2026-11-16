@@ -53,6 +53,17 @@ try {
     for (let i = 0; i < n; i++) (await page.keyboard.press(k), await page.waitForTimeout(150));
   };
   const focused = () => page.evaluate(() => document.querySelector("[data-focused=true]")?.getAttribute("data-testid") ?? null);
+  // The cue on screen and the film time; cues carry their film time ("· 0:05").
+  const cueSync = () =>
+    page.waitForFunction(() => {
+      const e = window.__chillEngine;
+      const t = Array.from(e.active.textTracks).find((x) => x.mode !== "disabled");
+      const shown = document.querySelector("[data-testid=subtitle-text]")?.textContent ?? "";
+      const cue = t && t.activeCues && t.activeCues[0];
+      if (!cue) return null;
+      const m = /· (\d+):(\d+)/.exec(cue.text);
+      return m && shown.includes(cue.text) ? { film: Number(m[1]) * 60 + Number(m[2]), now: e.now(), text: cue.text } : null;
+    }, null, { timeout: 15000 }).then((h) => h.jsonValue());
 
   console.log("remote-only navigation");
   await page.goto(`${base}/tv`);
@@ -87,6 +98,16 @@ try {
   const ttff = (Date.now() - t0) / 1000;
   check(ttff < 15, `first frame ${ttff.toFixed(1)} s after Play (fake transfer: 4 s)`);
   const before = await page.textContent("[data-testid=quality-label]");
+  // English film: subtitles start off. Turn English on, then watch them survive the switch.
+  check((await page.textContent("[data-testid=subtitle-label]")) === "Subtitles: Off", "English film starts with subtitles off");
+  await press("ArrowDown");
+  await page.waitForSelector("[data-testid=subtitle-menu]");
+  await press("ArrowDown"); // Off → English
+  await press("Enter");
+  let heatCue = await cueSync();
+  // Cues last 3 s and are labelled with their film start time: in sync ⇔ film position ∈ [label, label + 3].
+  const inSync = (c, leadIn = 0) => c.now - leadIn >= c.film - 0.1 && c.now - leadIn <= c.film + 3.1;
+  check(inSync(heatCue), `English on, in sync (cue ${heatCue.film} s, film ${heatCue.now.toFixed(1)} s)`);
   await page.waitForFunction(() => (window.__chillHandoff ?? []).length > 0, null, { timeout: 120000 }).catch(() => {});
   const reports = await page.evaluate(() => window.__chillHandoff ?? []);
   const first = reports[0];
@@ -97,6 +118,9 @@ try {
     check(Math.abs(first.atS - Math.round(first.atS / 20) * 20) < 0.1, `switched on a scene cut (${first.atS} s)`);
   }
   const after = await page.textContent("[data-testid=quality-label]");
+  heatCue = await cueSync();
+  // The 4K demo copy has a 2.5 s lead-in: its clock runs 2.5 s ahead of film time.
+  check(inSync(heatCue, 2.5), `subtitles stayed in sync through the switch (cue ${heatCue.film} s at 4K-copy time ${heatCue.now.toFixed(1)} s = film ${(heatCue.now - 2.5).toFixed(1)} s)`);
   check(before !== after && /2160p/.test(after ?? ""), `quality label changed: "${before}" → "${after}"`);
   await page.screenshot({ path: path.join(out, "upgraded.png") });
   await press("Escape");
@@ -109,9 +133,23 @@ try {
   const aud = await page.evaluate(() => { const e = window.__chillEngine; const v = e.active; return { compat: e.isCompat, audioBytes: v.webkitAudioDecodedByteCount, now: e.now() }; });
   check(aud.compat, "switched to the compat stream up front");
   check(aud.audioBytes > 0, `audio is decoding (${aud.audioBytes} bytes)`);
+  // Subtitles: a Korean film starts with English on, in sync with the film.
+  let cue = await cueSync();
+  check(/\[EN\]/.test(cue.text), `English subtitles on by default (${cue.text})`);
+  check(cue.now >= cue.film - 0.1 && cue.now <= cue.film + 3.1, `cue in sync on the compat stream (cue ${cue.film} s, film ${cue.now.toFixed(1)} s)`);
   await press("ArrowRight");
   await page.waitForTimeout(2500);
   const afterSeek = await page.evaluate(() => window.__chillEngine.now());
+  cue = await cueSync();
+  check(cue.now >= cue.film - 0.1 && cue.now <= cue.film + 3.1, `still in sync after seeking (cue ${cue.film} s, film ${cue.now.toFixed(1)} s)`);
+  await press("ArrowDown");
+  await page.waitForSelector("[data-testid=subtitle-menu]");
+  await press("ArrowUp"); // from English to Off
+  await press("Enter");
+  await page.waitForTimeout(500);
+  const offNow = await page.evaluate(() => ({ showing: Array.from(window.__chillEngine.active.textTracks).filter((x) => x.mode !== "disabled").length + (document.querySelector("[data-testid=subtitle-text]") ? 1 : 0), label: document.querySelector("[data-testid=subtitle-label]")?.textContent }));
+  check(offNow.showing === 0 && offNow.label === "Subtitles: Off", "the menu turns subtitles off with the remote");
+  check(/Stereo · converted/.test((await page.textContent("[data-testid=audio-label]")) ?? ""), "audio line says it's converted for this device");
   check(afterSeek > aud.now + 8, `seeking works on the compat stream (${aud.now.toFixed(1)} s → ${afterSeek.toFixed(1)} s)`);
   await press("Escape");
   await page.waitForTimeout(800);

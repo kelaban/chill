@@ -1,5 +1,5 @@
-import { httpJson } from "../http.js";
-import type { PutioApi, PutioFile, PutioTransfer } from "./types.js";
+import { http, HttpError, httpJson } from "../http.js";
+import type { PutioApi, PutioFile, PutioSubtitle, PutioTransfer } from "./types.js";
 
 // put.io API v2. Endpoint shapes per https://api.put.io/v2/docs (Swagger);
 // re-verify against the live docs with `npm run test:live`.
@@ -68,6 +68,19 @@ export function putioClient(token: string): PutioApi {
     },
     async deleteFiles(ids) {
       if (ids.length) await post("/files/delete", { file_ids: ids.join(",") });
+    },
+    async subtitles(fileId) {
+      // Shape per put.io's own API client (@putdotio/api-client: GET /files/{id}/subtitles);
+      // parsed tolerantly — DECISIONS D37.
+      const r = await get<{ subtitles?: any[] }>(`/files/${fileId}/subtitles`);
+      return (r.subtitles ?? [])
+        .filter((s) => s && s.key)
+        .map((s): PutioSubtitle => ({ key: String(s.key), language: s.language_code ?? s.language ?? null, name: String(s.name ?? s.key), source: String(s.source ?? "unknown") }));
+    },
+    async subtitleText(fileId, key, format) {
+      const res = await http(`${API}/files/${fileId}/subtitles/${encodeURIComponent(key)}?format=${format}`, { headers });
+      if (!res.ok) throw new HttpError(res.status, await res.text().catch(() => ""), "put.io subtitle");
+      return res.text();
     },
     async accountDisk() {
       const r = await get<{ info: { disk: { size: number; used: number; avail: number } } }>("/account/info");

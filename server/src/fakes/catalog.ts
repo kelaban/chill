@@ -83,6 +83,7 @@ export function fakeDetail(id: number): TmdbDetail | null {
     genres: r[3].map((g) => GENRES.find((x) => x.id === g)!).filter(Boolean),
     tagline: r[8],
     imdb_id: r[6],
+    original_language: ({ 496243: "ko", 129: "ja" } as Record<number, string>)[id] ?? "en",
     credits: { cast: [{ name: "Lead Actor", character: "Protagonist" }, { name: "Second Lead", character: "Antagonist" }], crew: [{ name: r[7], job: "Director" }] },
     recommendations: { results: recs },
     release_dates: { results: [{ iso_3166_1: "US", release_dates: [{ certification: "R", type: 3 }] }] },

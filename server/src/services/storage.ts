@@ -5,6 +5,7 @@ import { putioFolder, type Ctx } from "../context.js";
 import { admit, cacheEvictions, DEFAULT_EVICTION, planEviction, type Admission, type Budget, type VariantFacts } from "../domain/storage.js";
 import { getSetting } from "../db.js";
 import { log } from "../log.js";
+import { forgetSubtitles } from "./subtitles.js";
 
 const PLAYING_WINDOW_MS = 2 * 60_000;
 
@@ -27,6 +28,7 @@ export interface VariantRow {
   label: string;
   edition: string | null;
   probe_json: string | null;
+  subs_checked_at: number | null;
   superseded_by: string | null;
   pinned: number;
   ready: number;
@@ -126,11 +128,16 @@ export async function evictVariant(ctx: Ctx, id: string, reason: string): Promis
     const abs = path.join(ctx.cfg.libraryDir, v.local_path);
     await fs.promises.rm(abs, { force: true });
     const dir = path.dirname(abs);
+    // Its subtitle sidecars (`<stem>.en.srt`, …) go with it.
+    const stem = path.basename(abs).replace(/\.[^.]+$/, "");
+    for (const f of await fs.promises.readdir(dir).catch(() => [] as string[]))
+      if (f.startsWith(stem) && /\.(srt|vtt|ass|ssa)$/i.test(f)) await fs.promises.rm(path.join(dir, f), { force: true });
     if (dir.startsWith(ctx.cfg.libraryDir) && dir !== ctx.cfg.libraryDir) {
       const left = await fs.promises.readdir(dir).catch(() => ["?"]);
       if (left.length === 0) await fs.promises.rmdir(dir).catch(() => {});
     }
   }
+  await forgetSubtitles(ctx, id);
   ctx.db.transaction(() => {
     // Whatever this copy superseded is now superseded by what superseded it.
     ctx.db.prepare("UPDATE variants SET superseded_by = ? WHERE superseded_by = ?").run(v.superseded_by, id);

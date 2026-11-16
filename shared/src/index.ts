@@ -97,6 +97,21 @@ export interface StreamInfo {
   videoCodec: string | null;
   /** Container family (mp4, mkv, …) or null if unknown. */
   container: string | null;
+  audioChannels: number | null;
+  subtitles: SubtitleTrack[];
+  /** The track to start with for this profile, or null for none. */
+  subtitleId: string | null;
+}
+
+export interface SubtitleTrack {
+  id: string;
+  /** ISO 639-1, or null if unknown. */
+  language: string | null;
+  label: string;
+  forced: boolean;
+  sdh: boolean;
+  /** WebVTT in the copy's own timeline; add ?shift=&scale= to map it. */
+  url: string;
 }
 
 export type DynamicRange = "SDR" | "HDR10" | "DV";

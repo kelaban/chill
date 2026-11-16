@@ -6,6 +6,7 @@ import { probe } from "../media/ffmpeg.js";
 import { log } from "../log.js";
 import { queueUpgradeIfPlaying, supersedeLower } from "./acquirer.js";
 import { download } from "./downloader.js";
+import { discover as discoverSubtitles, saveSidecars } from "./subtitles.js";
 import { admitAndMakeRoom, publishStorage, variant } from "./storage.js";
 
 /** Copy a put.io variant to the home library, verified, Plex-named. */
@@ -60,6 +61,8 @@ export function registerMirrorJobs(ctx: Ctx) {
     await fs.promises.mkdir(path.dirname(abs), { recursive: true });
     await fs.promises.rename(partial, abs);
     const size = (await fs.promises.stat(abs)).size;
+    // Keep the put.io copy's subtitles: it's about to be cleaned up.
+    await saveSidecars(ctx, v, rel).catch((err) => log.warn("saving subtitles home failed", { variant: v.id, err }));
 
     const lid = newId("v");
     ctx.db
@@ -76,6 +79,7 @@ export function registerMirrorJobs(ctx: Ctx) {
     ctx.db.prepare("INSERT OR REPLACE INTO variant_alignments (from_id, to_id, a, b, residual_ms, aligned, created_at) VALUES (?, ?, 1, 0, 0, 1, ?)").run(v.id, lid, ctx.clock.now());
     supersedeLower(ctx, v.tmdb_id, lid);
     log.info("mirrored home", { tmdbId: v.tmdb_id, variant: lid, path: rel });
+    await discoverSubtitles(ctx, variant(ctx, lid)!).catch((err) => log.warn("subtitle discovery failed", { variant: lid, err }));
 
     queueUpgradeIfPlaying(ctx, v.tmdb_id, lid);
     ctx.jobs.enqueue("storage.cleanup", {}, { dedupeKey: "storage.cleanup", delayMs: 1000 });

@@ -5,7 +5,7 @@ import type { Release } from "../domain/release.js";
 import { normalizeTitle } from "../domain/release.js";
 import type { Clock } from "../jobs.js";
 import { FAKE_NO_RELEASES_ID, fakeDetail, fakeMovies, fakePosterSvg, GENRES } from "./catalog.js";
-import type { Samples } from "./samples.js";
+import { sampleSubtitles, SAMPLE_SECONDS, TARGET_LEAD_IN_S, type Samples } from "./samples.js";
 
 // Stand-ins for TMDB, chill.institute and put.io that behave like the real
 // things (latency, progress over time, quota, folders) so demo mode and the
@@ -255,6 +255,20 @@ export function fakePutio(opts: {
     },
     async accountDisk() {
       return { size: quota, used: used(), avail: quota - used() };
+    },
+    async subtitles(fid) {
+      const f = st.files.find((x) => x.id === fid);
+      if (!f?.sample) return [];
+      const base = f.name.replace(/\.\w+$/, "");
+      return [
+        { key: "en", language: "English", name: `${base}.en.srt`, source: "folder" },
+        { key: "es", language: "Spanish", name: `${base}.es.srt`, source: "folder" },
+      ];
+    },
+    async subtitleText(fid, key, format) {
+      const f = st.files.find((x) => x.id === fid);
+      if (!f?.sample) throw Object.assign(new Error(`put.io /files/${fid}/subtitles → HTTP 404`), { status: 404 });
+      return sampleSubtitles(key, SAMPLE_SECONDS, f.sample === "target" ? TARGET_LEAD_IN_S : 0, format);
     },
     mediaPath(fid) {
       const f = st.files.find((x) => x.id === fid);

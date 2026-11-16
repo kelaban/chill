@@ -15,9 +15,9 @@ Everything that *can* be pushed to the cloud is, so the home loop is short and r
 
 | Layer | Where | State |
 |---|---|---|
-| 1–3 | `server/test/*.test.ts` | ✅ 175 tests, incl. the ranker on 20 **real** chill.institute searches (invariants + locked snapshot) |
+| 1–3 | `server/test/*.test.ts` | ✅ 221 tests, incl. the ranker on 20 **real** chill.institute searches (invariants + locked snapshot) and subtitles (parsing, timing transforms, default pick, put.io/sidecar/embedded discovery) |
 | 4 Soak | — | ⏳ not written yet |
-| 5–6 UI + playback e2e | `scripts/e2e.mjs` | ✅ remote-only navigation, first frame, seamless switch on a cut (≤ 1 frame), resume |
+| 5–6 UI + playback e2e | `scripts/e2e.mjs` | ✅ remote-only navigation, first frame, seamless switch on a cut (≤ 1 frame), compat audio, subtitles in sync (fast copy, through the switch, compat, after a seek) and the remote-driven subtitle menu, resume |
 | 7 Build guards | `npm run typecheck`, `npm run check:bundle`, CI | ✅ |
 | 8 Live API | `server/test/services.live.test.ts` | ✅ chill.institute search, put.io Sintel transfer + URL + cleanup, Cinemeta; TMDB skipped (no token). Plus a manual real-mode run: Sintel searched → transferred → played (first frame 10.7 s) → copied home → put.io cleaned |
 | 9 On the TV | — | ⏸ tabled until home testing |

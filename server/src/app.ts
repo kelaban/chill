@@ -14,6 +14,7 @@ import { availability, ranking } from "./services/releases.js";
 import { evictVariant, publishStorage, report, variant } from "./services/storage.js";
 import { pendingUpgrade } from "./services/upgrade.js";
 import { compatResponse, compatStart } from "./services/compat.js";
+import { saveChoice, vttFor } from "./services/subtitles.js";
 
 const hlsCache = new Map<string, { url: string; until: number }>();
 
@@ -154,6 +155,21 @@ export function createApp(ctx: Ctx) {
       if ((err as { status?: number }).status === 429) return c.json({ state: "busy" });
       throw err;
     }
+  });
+
+  // ---- subtitles
+  app.get("/api/subtitles/:file", async (c) => {
+    const id = c.req.param("file").replace(/\.vtt$/, "");
+    const scale = Number(c.req.query("scale") ?? 1) || 1;
+    const shift = Number(c.req.query("shift") ?? 0) || 0;
+    const text = await vttFor(ctx, id, { scale, shift });
+    return new Response(text, { headers: { "Content-Type": "text/vtt; charset=utf-8", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" } });
+  });
+  /** Remember a profile's subtitle choice for a title; language null = off. */
+  app.post("/api/titles/:id/subtitle", async (c) => {
+    const b = await c.req.json<{ language: string | null; forced?: boolean; sdh?: boolean }>();
+    saveChoice(ctx, profileOf(c), Number(c.req.param("id")), b);
+    return c.json({ ok: true });
   });
 
   app.post("/api/progress", async (c) => {

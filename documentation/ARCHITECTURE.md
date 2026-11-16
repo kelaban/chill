@@ -173,6 +173,20 @@ always lands exactly on a cut.
   instant pick with the target's dynamic range to make this case rare.
 - If alignment failed: next natural break, proportional position mapping.
 
+### Subtitles
+
+Each stored copy's tracks are recorded once (`subtitles` table): a put.io copy
+lists put.io's subtitles for the file (sidecars in the transfer, tracks in the
+MKV); a home copy lists its Plex-style sidecars plus text tracks inside the file
+(ffprobe). Copying home saves put.io's English and original-language subtitles
+as sidecars first. Text is served as WebVTT from `/api/subtitles/:id.vtt`,
+cached raw on disk, with `?scale=&shift=` mapping it onto another timeline. The
+player keeps the viewer's *choice* (language + forced/SDH), not a track: after a
+switch it uses the new copy's matching track, or maps the old one through the
+alignment (`scale = a`, `shift = b`); on the compat stream it shifts by the
+offset. It draws the cues itself, above the controls. Defaults and memory per
+profile per title: `domain/subtitles.ts` → `pickSubtitle`.
+
 ### Resume after eviction
 
 Same as cold Play, but the ranker prefers the release (or edition) recorded in

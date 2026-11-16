@@ -12,7 +12,7 @@ real on the TV.
 | 1 | Walking skeleton: browse → Play from put.io on the TV | `plans/phase-1-walking-skeleton.md` | Built; TV acceptance pending |
 | 2 | Quality ladder, local tier & storage manager | `plans/phase-2-quality-ladder-and-storage.md` | Built; TV acceptance pending |
 | 3 | Netflix polish & personalization | to write | — |
-| 4 | Playback robustness (remux, audio, subtitles) | to write | — |
+| 4 | Playback robustness (remux, audio, subtitles) | `plans/phase-4-subtitles.md` (4a) | Compat remux + subtitles built; TV check pending |
 | 5 | Phone & Google Cast | to write | — |
 | 6 | TV shows | to write | — |
 
