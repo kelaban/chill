@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ChillApi, PutioApi, PutioFile, PutioTransfer, Services, TmdbApi, TmdbMovie, TvShowInfo } from "../adapters/types.js";
+import type { ChillApi, PutioApi, PutioFile, PutioTransfer, Services, TmdbApi, TmdbMovie, TmdbWatchProviders, TvShowInfo } from "../adapters/types.js";
 import type { Release } from "../domain/release.js";
 import { normalizeTitle } from "../domain/release.js";
 import type { Clock } from "../jobs.js";
@@ -42,6 +42,17 @@ export function fakeTmdb(): TmdbApi {
       const d = fakeDetail(id);
       if (!d) throw Object.assign(new Error(`TMDB /movie/${id} → HTTP 404`), { status: 404 });
       return d;
+    },
+    // A few films with JustWatch-style data; the rest have none (the UI falls back to release tags).
+    async watchProviders(id, region) {
+      if (region !== "US") return null;
+      const P = (provider_id: number, provider_name: string, display_priority: number) => ({ provider_id, provider_name, display_priority });
+      const table: Record<number, TmdbWatchProviders> = {
+        438631: { flatrate: [P(1899, "HBO Max", 26), P(1825, "HBO Max Amazon Channel", 14)], rent: [P(2, "Apple TV Store", 11)] },
+        238: { flatrate: [P(2303, "Paramount Plus Premium", 18), P(582, "Paramount+ Amazon Channel", 30)], ads: [P(207, "The Roku Channel", 33)] },
+        496243: { rent: [P(2, "Apple TV Store", 11), P(10, "Amazon Video", 10)], buy: [P(3, "Google Play Movies", 24)] },
+      };
+      return table[id] ?? null;
     },
     async byImdb(imdbId) {
       const m = fakeMovies().find((x) => fakeDetail(x.id)?.imdb_id === imdbId);

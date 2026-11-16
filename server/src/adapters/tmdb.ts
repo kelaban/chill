@@ -1,5 +1,5 @@
 import { http, httpJson } from "../http.js";
-import type { DiscoverParams, TmdbApi, TmdbDetail, TmdbList, TmdbMovie } from "./types.js";
+import type { DiscoverParams, TmdbApi, TmdbDetail, TmdbList, TmdbMovie, TmdbWatchProviders } from "./types.js";
 
 const API = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p";
@@ -48,6 +48,10 @@ export function tmdbClient(token: string): TmdbApi & { verify(): Promise<void> }
     },
     movie(id) {
       return get<TmdbDetail>(`/movie/${id}`, { append_to_response: "credits,recommendations,release_dates" });
+    },
+    async watchProviders(id, region) {
+      const r = await get<{ results: Record<string, TmdbWatchProviders> }>(`/movie/${id}/watch/providers`);
+      return r.results[region] ?? null;
     },
     async byImdb(imdbId) {
       const r = await get<{ movie_results: TmdbMovie[] }>(`/find/${imdbId}`, { external_source: "imdb_id" });

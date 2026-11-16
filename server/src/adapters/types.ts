@@ -28,6 +28,22 @@ export interface TmdbDetail extends TmdbMovie {
   release_dates?: { results: { iso_3166_1: string; release_dates: { certification: string; type: number }[] }[] };
 }
 
+export interface TmdbProvider {
+  provider_id: number;
+  provider_name: string;
+  display_priority?: number;
+}
+
+/** One country's entry of `/movie/:id/watch/providers` (data by JustWatch). */
+export interface TmdbWatchProviders {
+  link?: string;
+  flatrate?: TmdbProvider[];
+  free?: TmdbProvider[];
+  ads?: TmdbProvider[];
+  rent?: TmdbProvider[];
+  buy?: TmdbProvider[];
+}
+
 export type TmdbList = "trending" | "popular" | "top_rated" | "now_playing" | "upcoming";
 
 export interface DiscoverParams {
@@ -49,6 +65,8 @@ export interface TmdbApi {
   /** Series search, when the catalog has one (Cinemeta does; TMDB would need its own call). */
   searchShows?(query: string): Promise<TvShowInfo[]>;
   genres(): Promise<{ id: number; name: string }[]>;
+  /** TMDB only: where a film streams in a country (null when TMDB has no entry, or is off). */
+  watchProviders?(tmdbId: number, region: string): Promise<TmdbWatchProviders | null>;
   /** Image bytes for the /img proxy. */
   image(size: string, path: string): Promise<{ body: Uint8Array; contentType: string }>;
 }

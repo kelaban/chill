@@ -86,6 +86,18 @@ try {
   check(true, "Back returns home");
   await page.screenshot({ path: path.join(out, "home.png") });
 
+  console.log("where it streams");
+  await page.goto(`${base}/title/438631`);
+  await page.waitForSelector("[data-testid=services]");
+  const dune = await page.$eval("[data-testid=services]", (e) => ({ text: e.textContent, source: e.getAttribute("data-source") }));
+  check(dune.source === "tmdb" && /On\s*HBO Max/.test(dune.text) && /JustWatch/.test(dune.text), `TMDB says Dune is on HBO Max, credited to JustWatch (${dune.text})`);
+  await page.goto(`${base}/title/496243`);
+  await page.waitForSelector("[data-testid=services]");
+  check(/Rent or buy on/.test(await page.textContent("[data-testid=services]")), "nothing streams Parasite: rent or buy");
+  await page.goto(`${base}/title/949`);
+  await page.waitForFunction(() => document.querySelector("[data-testid=services]")?.getAttribute("data-source") === "releases", null, { timeout: 20000 });
+  check(/Netflix/.test(await page.textContent("[data-testid=services]")), "no TMDB data for Heat: falls back to the release tags (Netflix)");
+
   console.log("play → fast copy → seamless upgrade");
   await page.goto(`${base}/title/949`);
   await page.waitForFunction(() => /Starts in|Ready/.test(document.querySelector("[data-testid=availability]")?.textContent ?? ""), null, { timeout: 20000 });

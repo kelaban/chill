@@ -110,6 +110,21 @@ export interface TitleDetail extends TitleSummary {
   availability: Availability;
   recommendations: TitleSummary[];
   inMyList: boolean;
+  /**
+   * Where it streams right now, from TMDB's watch providers (data by JustWatch).
+   * Only when TMDB is on (key configured and working); otherwise null and the UI
+   * uses `availability.services` (from release source tags).
+   */
+  watchOn: WatchOn | null;
+}
+
+export interface WatchOn {
+  source: "tmdb";
+  region: string;
+  /** Subscription, free and ad-supported services, likeliest first. */
+  services: Service[];
+  /** Rent / buy storefronts, when nothing streams it. */
+  stores: Service[];
 }
 
 export type AcquisitionPhase =

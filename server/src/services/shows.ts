@@ -11,7 +11,7 @@ import { normalizeTitle } from "../domain/release.js";
 const H = 3_600_000;
 
 export const TV_ROWS: [TvSource, string][] = [
-  ["NETFLIX", "Netflix"], ["HBO_MAX", "HBO Max"], ["APPLE_TV_PLUS", "Apple TV+"], ["PRIME_VIDEO", "Prime Video"], ["DISNEY_PLUS", "Disney+"],
+  ["NETFLIX", "Netflix"], ["HBO_MAX", "HBO Max"], ["APPLE_TV_PLUS", "Apple TV"], ["PRIME_VIDEO", "Prime Video"], ["DISNEY_PLUS", "Disney+"],
   ["HULU", "Hulu"], ["PARAMOUNT_PLUS", "Paramount+"], ["PEACOCK", "Peacock"], ["AMC_PLUS", "AMC+"],
 ];
 

@@ -11,6 +11,8 @@ const Env = z.object({
   /** Run with fake TMDB / chill.institute / put.io and generated sample films. */
   CHILL_FAKE: bool.default("0"),
   TMDB_TOKEN: z.string().optional(),
+  /** Country for TMDB's "where it streams" (ISO 3166-1). */
+  WATCH_REGION: z.string().regex(/^[A-Z]{2}$/).default("US"),
   CHILL_TOKEN: z.string().optional(),
   PUTIO_TOKEN: z.string().optional(),
   PUTIO_FOLDER: z.string().default("chill"),
@@ -58,6 +60,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     cacheDir: path.join(dataDir, "cache"),
     fake: e.CHILL_FAKE,
     tmdbToken: e.TMDB_TOKEN ?? "",
+    watchRegion: e.WATCH_REGION,
     chillToken: e.CHILL_TOKEN ?? "",
     putioToken: e.PUTIO_TOKEN ?? "",
     putioFolder: e.PUTIO_FOLDER,

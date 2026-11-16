@@ -50,7 +50,10 @@ export function Detail() {
 
   const a = availabilityText(avail.data ?? t.availability);
   const cur = avail.data ?? t.availability;
-  const services = cur.state === "available" || cur.state === "ready" ? cur.services : [];
+  // TMDB's live "where it streams" when TMDB is on; otherwise the release-tag guess.
+  const tagServices = cur.state === "available" || cur.state === "ready" ? cur.services : [];
+  const services = t.watchOn ? t.watchOn.services : tagServices;
+  const stores = t.watchOn?.stores ?? [];
   const resumable = t.watch && !t.watch.watched && t.watch.positionS > 30;
   const toggleList = async () => {
     await (t.inMyList ? api.removeFromList(id) : api.addToList(id));
@@ -80,14 +83,16 @@ export function Detail() {
             {t.director && <>Director: {t.director} · </>}
             {t.cast.slice(0, 4).map((c) => c.name).join(", ")}
           </div>
-          {services.length > 0 && (
-            <div className="mb-4 flex flex-wrap items-center gap-3 text-xl text-white/70" data-testid="services">
-              <span>On</span>
-              {services.map((s) => (
+          {(services.length > 0 || stores.length > 0) && (
+            <div className="mb-4 flex flex-wrap items-center gap-3 text-xl text-white/70" data-testid="services" data-source={t.watchOn ? "tmdb" : "releases"}>
+              <span>{services.length ? "On" : "Rent or buy on"}</span>
+              {(services.length ? services : stores).map((s) => (
                 <span key={s.code} className="rounded-md px-3 py-1 text-lg font-bold" style={SERVICE_STYLE[s.code] ?? { background: "rgba(255,255,255,0.15)", color: "#fff" }}>
                   {s.name}
                 </span>
               ))}
+              {/* TMDB's terms: watch-provider data must credit JustWatch. */}
+              {t.watchOn && <span className="text-sm text-white/40">via JustWatch</span>}
             </div>
           )}
           <div className={`mb-8 text-xl ${a.tone}`} data-testid="availability">

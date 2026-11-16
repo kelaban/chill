@@ -1,10 +1,11 @@
-import type { HomeResponse, Row, TitleDetail, TitleSummary } from "@chill/shared";
+import type { HomeResponse, Row, TitleDetail, TitleSummary, WatchOn } from "@chill/shared";
 import type { DiscoverParams, TmdbDetail, TmdbList, TmdbMovie } from "../adapters/types.js";
 import { normalizeTitle } from "../domain/release.js";
 import type { Ctx } from "../context.js";
 import { cached } from "../db.js";
 import type { TitleFacts } from "../domain/ranker.js";
 import { availability } from "./releases.js";
+import { providerServices } from "../domain/services.js";
 import { episodeRow, isEpisode, showRow } from "./shows.js";
 
 const H = 3_600_000;
@@ -209,8 +210,23 @@ function episodeTitle(ctx: Ctx, tmdbId: number): { facts: TitleFacts; detail: Tm
   return { facts: { title: show.title, originalTitle: null, year: null, imdbId: null, runtimeMin: e.runtime_min, originalLanguage: null }, detail };
 }
 
+/**
+ * Where a film streams now, from TMDB's watch providers (JustWatch data), cached
+ * 24 h. Only while TMDB is on; null otherwise, for episodes, on any error, or
+ * when TMDB has nothing for the region — the UI then falls back to the
+ * release-tag guess (where web copies came from: the film's origin).
+ */
+export async function watchOn(ctx: Ctx, tmdbId: number): Promise<WatchOn | null> {
+  const providers = ctx.svc.tmdb.watchProviders;
+  if (!ctx.catalog.tmdb || !providers || isEpisode(tmdbId)) return null;
+  const region = ctx.cfg.watchRegion;
+  const p = await cached(ctx.db, `${src(ctx)}:providers:${region}:${tmdbId}`, 24 * H, ctx.clock.now(), () => providers(tmdbId, region)).catch(() => null);
+  const on = providerServices(p);
+  return on.services.length || on.stores.length ? { source: "tmdb", region, ...on } : null;
+}
+
 export async function detail(ctx: Ctx, tmdbId: number, profileId: number): Promise<TitleDetail> {
-  const { detail: d } = await ensureTitle(ctx, tmdbId);
+  const [{ detail: d }, on] = await Promise.all([ensureTitle(ctx, tmdbId), watchOn(ctx, tmdbId)]);
   const ws = watchState(ctx, profileId, tmdbId);
   const cert = d.release_dates?.results.find((r) => r.iso_3166_1 === "US")?.release_dates.find((x) => x.certification)?.certification ?? null;
   if (availability(ctx, tmdbId).state === "unknown") ctx.jobs.enqueue("releases.search", { tmdbId }, { dedupeKey: `releases.search:${tmdbId}` });
@@ -229,5 +245,6 @@ export async function detail(ctx: Ctx, tmdbId: number, profileId: number): Promi
     availability: availability(ctx, tmdbId),
     recommendations: withReady((d.recommendations?.results ?? []).slice(0, 16).map(toSummary), readySet(ctx)),
     inMyList: inList,
+    watchOn: on,
   };
 }

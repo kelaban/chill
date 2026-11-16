@@ -106,6 +106,19 @@ export function gatedCatalog(
     genres: route("genres"),
     // TMDB has no series search here; Cinemeta's is keyless.
     ...(fallback.searchShows ? { searchShows: (q: string) => fallback.searchShows!(q) } : {}),
+    // TMDB-only: when TMDB is off (or refuses mid-flight) the answer is "no data", never an error.
+    async watchProviders(id, region) {
+      if (state !== "ok" || !tmdb.watchProviders) return null;
+      try {
+        return await tmdb.watchProviders(id, region);
+      } catch (e) {
+        if (rejected(e)) {
+          state = "rejected";
+          checkedAt = now();
+        }
+        return null;
+      }
+    },
     // Images go wherever their path came from: Cinemeta's are "/mh/…", the rest
     // are TMDB's (image.tmdb.org needs no key, so they load even with a bad one).
     image(size, path) {

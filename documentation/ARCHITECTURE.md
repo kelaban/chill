@@ -253,7 +253,8 @@ GET    /img/:size/:path              TMDB image proxy with a disk cache
   15 min while it doesn't, dropped on any 401/403); otherwise Cinemeta does, and
   the TMDB-only features (`ctx.catalog.tmdb`) stay off. Catalog caches are keyed
   by the answering catalog. DECISIONS D46.
-- **TMDB v3**: `/authentication` (key check), `/trending`, `/movie/popular|top_rated|now_playing|upcoming`,
+- **TMDB v3**: `/authentication` (key check), `/movie/:id/watch/providers`
+  ("where it streams", `WATCH_REGION`, 24 h cache, D41/D47), `/trending`, `/movie/popular|top_rated|now_playing|upcoming`,
   `/discover/movie`, `/search/movie`, `/movie/:id?append_to_response=credits,videos,images,release_dates,recommendations,external_ids`, `/genre/movie/list`.
 
 ## TV delivery

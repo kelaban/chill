@@ -14,6 +14,8 @@ import { FAKE_NO_RELEASES_ID } from "../src/fakes/catalog.js";
 import { ensureSamples } from "../src/fakes/samples.js";
 import { fakeServices, type FakePutio } from "../src/fakes/services.js";
 import { setLogSink } from "../src/log.js";
+import { fixedGate } from "../src/adapters/catalogGate.js";
+import { watchOn } from "../src/services/catalog.js";
 
 // End to end through the HTTP API with fake TMDB / chill.institute / put.io,
 // real SQLite, real ffmpeg (alignment, cut detection, probe) and a real HTTP
@@ -340,6 +342,28 @@ describe("where a film streams", () => {
     await advance(10_000);
     const st = await api<PlayStatus>("GET", `/api/titles/${HEAT}/play`);
     expect(st.stream?.label).toMatch(/· Netflix · (put\.io|Home)$/);
+  });
+
+  type WithOn = { watchOn: { source: string; region: string; services: { name: string }[]; stores: { name: string }[] } | null };
+  it("with TMDB on, says where it streams now (JustWatch data), one chip per service", async () => {
+    const dune = await api<WithOn>("GET", "/api/titles/438631");
+    expect(dune.watchOn).toMatchObject({ source: "tmdb", region: "US", stores: [] });
+    expect(dune.watchOn!.services.map((s) => s.name)).toEqual(["HBO Max"]); // "HBO Max" + "HBO Max Amazon Channel" → once
+    const godfather = await api<WithOn>("GET", "/api/titles/238");
+    expect(godfather.watchOn!.services.map((s) => s.name)).toEqual(["Paramount+", "The Roku Channel"]); // subscription, then ad-supported
+  });
+
+  it("lists storefronts only when nothing streams it", async () => {
+    const parasite = await api<WithOn>("GET", "/api/titles/496243");
+    expect(parasite.watchOn!.services).toEqual([]);
+    expect(parasite.watchOn!.stores.map((s) => s.name)).toEqual(["Prime Video", "Apple TV Store"]);
+  });
+
+  it("falls back to the release tags when TMDB has nothing, or TMDB is off", async () => {
+    expect((await api<WithOn>("GET", `/api/titles/${HEAT}`)).watchOn).toBeNull();
+    const off = { ...ctx, catalog: fixedGate("cinemeta") };
+    expect(await watchOn(off, 438631)).toBeNull();
+    expect(await watchOn(ctx, 438631)).not.toBeNull();
   });
 });
 
