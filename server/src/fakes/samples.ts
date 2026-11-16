@@ -14,12 +14,14 @@ export const TARGET_LEAD_IN_S = 2.5;
 export interface Samples {
   instant: string;
   target: string;
+  /** Like `instant`, but MKV with E-AC3 5.1 audio — what most real releases look like, and what desktop Chrome can't decode. */
+  instantEac3: string;
 }
 
 export async function ensureSamples(dir: string, seconds = SAMPLE_SECONDS): Promise<Samples> {
   fs.mkdirSync(dir, { recursive: true });
-  const out = { instant: path.join(dir, `instant-${seconds}.mp4`), target: path.join(dir, `target-${seconds}.mp4`) };
-  if (fs.existsSync(out.instant) && fs.existsSync(out.target)) return out;
+  const out = { instant: path.join(dir, `instant-${seconds}.mp4`), target: path.join(dir, `target-${seconds}.mp4`), instantEac3: path.join(dir, `instant-eac3-${seconds}.mkv`) };
+  if (fs.existsSync(out.instant) && fs.existsSync(out.target) && fs.existsSync(out.instantEac3)) return out;
 
   const film = path.join(dir, "film.wav");
   const lead = path.join(dir, "lead.wav");
@@ -47,5 +49,7 @@ export async function ensureSamples(dir: string, seconds = SAMPLE_SECONDS): Prom
     "-filter_complex", "[0:v][2:a][1:v][3:a]concat=n=2:v=1:a=1[v][a]",
     "-map", "[v]", "-map", "[a]", ...enc, "-b:v", "1500k", out.target,
   ]);
+  // Same picture, E-AC3 5.1 audio in MKV.
+  await runProcess("ffmpeg", ["-y", "-v", "error", "-i", out.instant, "-map", "0:v", "-map", "0:a", "-c:v", "copy", "-c:a", "eac3", "-ac", "6", "-b:a", "384k", out.instantEac3]);
   return out;
 }

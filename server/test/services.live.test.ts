@@ -11,6 +11,13 @@ import { rank } from "../src/domain/ranker.js";
 //
 // The put.io suite transfers *Sintel* (Blender Foundation, CC-BY, ~130 MB) into
 // a `chill-test` folder and deletes it afterwards.
+//
+// OPT-IN ONLY. put.io flagged the dev environment's IP after repeated test
+// transfers, and both put.io and chill.institute rate-limit (HTTP 429). Day to
+// day, rely on the fakes and the recorded fixtures in test/fixtures/chill.
+// Run a suite only deliberately: LIVE_CHILL=1 and/or LIVE_PUTIO=1.
+const LIVE_CHILL = process.env.LIVE_CHILL === "1";
+const LIVE_PUTIO = process.env.LIVE_PUTIO === "1";
 
 const tok = (k: string) => process.env[k] || "placeholder-proxy-injects-the-real-one";
 const unauthorized = (e: unknown) => e instanceof HttpError && (e.status === 401 || e.status === 403);
@@ -27,7 +34,7 @@ describe("TMDB (live)", () => {
   });
 });
 
-describe("chill.institute (live)", () => {
+describe.skipIf(!LIVE_CHILL)("chill.institute (live, opt-in: LIVE_CHILL=1)", () => {
   it("returns parsed releases the ranker can use", async (t) => {
     const chill = chillClient(tok("CHILL_TOKEN"));
     const rs = await chill.search("Heat 1995").catch((e) => (unauthorized(e) ? t.skip() : Promise.reject(e)));
@@ -39,7 +46,7 @@ describe("chill.institute (live)", () => {
   });
 });
 
-describe("put.io (live)", () => {
+describe.skipIf(!LIVE_PUTIO)("put.io (live, opt-in: LIVE_PUTIO=1)", () => {
   it("transfers Sintel, resolves a download URL, and cleans up", { timeout: 600_000 }, async (t) => {
     const putio = putioClient(tok("PUTIO_TOKEN"));
     const disk = await putio.accountDisk().catch((e) => (unauthorized(e) ? t.skip() : Promise.reject(e)));

@@ -48,7 +48,7 @@ Not affiliated with chill.institute; it's an API we call.
 |---|---|
 | Dev (demo mode without tokens) | `npm run dev` |
 | Typecheck / tests / e2e | `npm run typecheck` · `npm test` · `npm run test:e2e` |
-| Live API smoke tests | `CHILL_TOKEN=proxy-injected PUTIO_TOKEN=proxy-injected npm run test:live` (in the cloud env the proxy injects the real tokens) |
+| Live API smoke tests | `npm run test:live` runs only the keyless catalog. put.io / chill.institute suites are **opt-in** (`LIVE_PUTIO=1`, `LIVE_CHILL=1`) — put.io flagged the dev IP once; use fakes and recorded fixtures instead |
 | Build + bundle check | `npm run build && npm run check:bundle` |
 | TV package | `CHILL_URL=http://<server>:7878 npm run webos:package` |
 

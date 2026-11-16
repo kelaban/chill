@@ -138,8 +138,11 @@ interface FakeTransfer {
 
 interface FakeFile extends PutioFile {
   /** Real bytes served for this VIDEO file. */
-  sample?: "instant" | "target";
+  sample?: keyof Samples;
 }
+
+/** Demo title whose copies carry E-AC3 audio in MKV, like most real releases. */
+export const FAKE_EAC3_ID = 496243; // Parasite
 
 interface FakeState {
   nextId: number;
@@ -179,9 +182,10 @@ export function fakePutio(opts: {
     if (pct >= 100 && t.fileId === null) {
       const folder: FakeFile = { id: id(), name: t.name, size: 0, fileType: "FOLDER", parentId: t.parentId };
       const meta = fakeReleaseSize(t.link);
+      const eac3 = meta?.tmdbId === FAKE_EAC3_ID;
       const video: FakeFile = {
-        id: id(), name: `${t.name}.mp4`, size: t.size, fileType: "VIDEO", parentId: folder.id, contentType: "video/mp4",
-        sample: meta && meta.resolution >= 2160 ? "target" : "instant",
+        id: id(), name: `${t.name}.${eac3 ? "mkv" : "mp4"}`, size: t.size, fileType: "VIDEO", parentId: folder.id, contentType: eac3 ? "video/x-matroska" : "video/mp4",
+        sample: eac3 ? "instantEac3" : meta && meta.resolution >= 2160 ? "target" : "instant",
       };
       const nfo: FakeFile = { id: id(), name: `${t.name}.nfo`, size: 2_000, fileType: "TEXT", parentId: folder.id };
       st.files.push(folder, video, nfo);

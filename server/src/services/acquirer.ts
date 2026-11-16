@@ -69,7 +69,29 @@ export function streamInfo(ctx: Ctx, v: VariantRow, profileId: number): StreamIn
     dynamicRange: v.dynamic_range,
     startAtS,
     durationS: v.duration_s,
+    audioCodec: normalizeCodec(v.audio_codec),
+    videoCodec: normalizeCodec(v.video_codec),
+    container: normalizeContainer(v.container),
   };
+}
+
+/** ffprobe and release-fact codec names → one vocabulary the player checks with canPlayType. */
+export function normalizeCodec(c: string | null): string | null {
+  if (!c) return null;
+  const s = c.toLowerCase();
+  if (s === "unknown" || s === "other") return null;
+  if (s === "h265" || s === "hevc") return "hevc";
+  if (s === "h264" || s === "avc" || s === "avc1") return "h264";
+  if (s.startsWith("dts")) return "dts";
+  return s; // aac, ac3, eac3, truehd, opus, mp3, flac, av1, vp9 …
+}
+
+export function normalizeContainer(c: string | null): string | null {
+  if (!c) return null;
+  const s = c.toLowerCase();
+  if (s.includes("matroska") || s.includes("mkv") || s.includes("webm")) return "mkv";
+  if (s.includes("mp4") || s.includes("mov")) return "mp4";
+  return s.split(",")[0] ?? null;
 }
 
 function bestVariant(ctx: Ctx, tmdbId: number): VariantRow | null {
@@ -182,7 +204,8 @@ async function pickVideo(ctx: Ctx, fileId: number): Promise<PutioFile | null> {
 }
 
 export function registerAcquireJobs(ctx: Ctx) {
-  const pollMs = ctx.cfg.fake ? 1000 : 3000;
+  // Gentle on put.io: it rate-limits (and flagged our dev IP during testing).
+  const pollMs = ctx.cfg.fake ? 1000 : 5000;
 
   ctx.jobs.register("acquire.search", async ({ acqId, prefetch }: { acqId: number; prefetch?: boolean }) => {
     const a = acq(ctx, acqId);
@@ -249,7 +272,7 @@ export function registerAcquireJobs(ctx: Ctx) {
         maybeRace(ctx, a, t.percentDone);
       }
       const age = ctx.clock.now() - a.created_at;
-      return { againInMs: age < 60_000 ? pollMs : pollMs * 3 };
+      return { againInMs: age < 60_000 ? pollMs : pollMs * 4 };
     }
     if (!t.fileId) return { againInMs: pollMs };
     const file = await pickVideo(ctx, t.fileId);
@@ -270,6 +293,20 @@ export function registerAcquireJobs(ctx: Ctx) {
       )
       .run(vid, a.tmdb_id, a.tier, a.release_id, a.id, file.id, file.size, f?.resolution ?? null, f?.dynamicRange ?? "SDR", f?.video ?? null, f?.audio ?? null,
         runtime ? runtime * 60 : null, rel ? releaseLabel(rel) : file.name, f?.edition ?? null, ctx.clock.now());
+    // Measure the file before anyone plays it: the player needs the real audio
+    // codec to decide whether this device can decode it (bounded; falls back to
+    // release facts and the background probe).
+    try {
+      const { mediaInput } = await import("./media.js");
+      const { probe } = await import("../media/ffmpeg.js");
+      const p = await Promise.race([probe(await mediaInput(ctx, variant(ctx, vid)!)), new Promise<null>((r) => setTimeout(() => r(null), 15_000))]);
+      if (p)
+        ctx.db
+          .prepare("UPDATE variants SET duration_s = COALESCE(?, duration_s), video_codec = COALESCE(?, video_codec), audio_codec = COALESCE(?, audio_codec), container = ?, probe_json = ? WHERE id = ?")
+          .run(p.durationS, p.videoCodec, p.audioCodec, p.container, JSON.stringify(p), vid);
+    } catch (err) {
+      log.warn("probe before ready failed", { variant: vid, err });
+    }
     update(ctx, acqId, { state: "ready", putio_file_id: file.id, percent: 100, eta_s: 0 });
     ctx.db.prepare("UPDATE acquisitions SET ready_at = ? WHERE id = ?").run(ctx.clock.now(), acqId);
     log.info("ready on put.io", { tmdbId: a.tmdb_id, tier: a.tier, variant: vid });

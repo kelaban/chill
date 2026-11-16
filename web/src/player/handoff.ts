@@ -71,10 +71,16 @@ export class HandoffEngine {
   private naturalBreak: UpgradeReady | null = null;
   private destroyed = false;
   private lastFrame: Frame | null = null;
+  /** Compat streams start their clock at 0; this is where 0 sits in the film. */
+  private offset = 0;
+  private compat = false;
+  private hls: { destroy(): void } | null = null;
 
   constructor(
     private container: HTMLElement,
     private ev: EngineEvents = {},
+    /** Does this stream need the server's compat remux on this device? */
+    private needsCompat: (s: StreamInfo) => boolean = () => false,
   ) {
     this.els = [this.makeVideo(), this.makeVideo()];
     this.show(this.els[0]);
@@ -93,6 +99,16 @@ export class HandoffEngine {
   get current() {
     return this.stream;
   }
+  /** Position in the film (not the element's clock). */
+  now(): number {
+    return this.offset + this.active.currentTime;
+  }
+  duration(): number {
+    return this.stream?.durationS || (this.active.duration ? this.offset + this.active.duration : 0);
+  }
+  get isCompat() {
+    return this.compat;
+  }
 
   private makeVideo(): HTMLVideoElement {
     const v = document.createElement("video");
@@ -100,7 +116,7 @@ export class HandoffEngine {
     v.preload = "auto";
     v.className = "absolute inset-0 h-full w-full bg-black object-contain";
     v.setAttribute("data-testid", "video");
-    v.addEventListener("timeupdate", () => v === this.active && this.ev.onTime?.(v.currentTime, v.duration || this.stream?.durationS || 0));
+    v.addEventListener("timeupdate", () => v === this.active && this.ev.onTime?.(this.now(), this.duration()));
     v.addEventListener("play", () => v === this.active && this.ev.onPlaying?.(true));
     v.addEventListener("pause", () => {
       if (v !== this.active || this.busy) return;
@@ -136,8 +152,12 @@ export class HandoffEngine {
   }
 
   async load(stream: StreamInfo, startAtS: number, autoplay = true): Promise<void> {
+    if (this.needsCompat(stream)) return this.loadCompat(stream, startAtS, autoplay);
     this.generation++;
     this.stream = stream;
+    this.dropHls();
+    this.offset = 0;
+    this.compat = false;
     const v = this.active;
     v.muted = false;
     v.volume = 1;
@@ -151,10 +171,66 @@ export class HandoffEngine {
     if (autoplay) await v.play().catch(() => this.ev.onPlaying?.(false));
   }
 
-  /** Swap to a different source in place (e.g. put.io HLS fallback), same position. */
-  async replaceSource(stream: StreamInfo, atS: number) {
+  /**
+   * Play `stream` through the server's compat remux (AAC audio, fragmented MP4)
+   * from `atS`. The server starts at the keyframe at or before `atS` and tells
+   * us where, so positions stay exact.
+   */
+  async loadCompat(stream: StreamInfo, atS: number, autoplay = true): Promise<void> {
+    this.generation++;
     this.stream = stream;
-    await this.load(stream, atS);
+    this.dropHls();
+    const res = await fetch(`/api/stream/${encodeURIComponent(stream.variantId)}/compat-start?t=${Math.max(0, atS).toFixed(3)}`);
+    const { start, url } = (await res.json()) as { start: number; url: string };
+    const v = this.active;
+    this.offset = start;
+    this.compat = true;
+    v.muted = false;
+    v.volume = 1;
+    v.src = url;
+    await once(v, "loadedmetadata", 60_000);
+    const into = atS - start;
+    if (into > 0.2) {
+      v.currentTime = into;
+      await once(v, "seeked").catch(() => {});
+    }
+    this.ev.onDebug?.(`compat stream from ${start.toFixed(2)} s`);
+    if (autoplay) await v.play().catch(() => this.ev.onPlaying?.(false));
+  }
+
+  /** The current copy plays without sound here: same copy, same moment, via compat. */
+  async switchToCompat(): Promise<void> {
+    if (!this.stream || this.compat) return;
+    const at = this.now();
+    const playing = !this.active.paused;
+    await this.loadCompat(this.stream, at, playing);
+  }
+
+  /** Last resort: put.io's HLS (converted by put.io) at the current moment. */
+  async attachHls(url: string, atS: number): Promise<void> {
+    this.generation++;
+    this.dropHls();
+    const v = this.active;
+    this.offset = 0;
+    this.compat = false;
+    if (v.canPlayType("application/vnd.apple.mpegurl") && !/Chrome|Chromium/.test(navigator.userAgent)) {
+      v.src = url;
+      await once(v, "loadedmetadata", 60_000);
+    } else {
+      const { default: Hls } = await import("hls.js");
+      const h = new Hls();
+      this.hls = h;
+      h.loadSource(url);
+      h.attachMedia(v);
+      await new Promise<void>((resolve) => h.once(Hls.Events.MANIFEST_PARSED, () => resolve()));
+    }
+    if (atS > 0) v.currentTime = atS;
+    await v.play().catch(() => this.ev.onPlaying?.(false));
+  }
+
+  private dropHls() {
+    this.hls?.destroy();
+    this.hls = null;
   }
 
   play() {
@@ -168,12 +244,21 @@ export class HandoffEngine {
     else this.pause();
   }
   seekBy(deltaS: number) {
-    this.seekTo(this.active.currentTime + deltaS);
+    this.seekTo(this.now() + deltaS);
   }
   seekTo(t: number) {
     this.generation++; // any handoff in preparation is now stale
     const v = this.active;
-    v.currentTime = Math.max(0, Math.min(t, (v.duration || Infinity) - 1));
+    const target = Math.max(0, Math.min(t, (this.duration() || Infinity) - 1));
+    if (this.compat && this.stream) {
+      // A piped stream can't seek outside what it has buffered: restart it there.
+      const inBuffer = target >= this.offset && Array.from({ length: v.buffered.length }, (_, i) => [v.buffered.start(i), v.buffered.end(i)]).some(([s, e]) => target - this.offset >= s! && target - this.offset <= e!);
+      if (inBuffer) v.currentTime = target - this.offset;
+      else void this.loadCompat(this.stream, target, !v.paused);
+      if (this.naturalBreak) void this.swapAtBreak();
+      return;
+    }
+    v.currentTime = target;
     if (this.naturalBreak) void this.swapAtBreak();
     else if (this.pending) void this.upgrade(this.pending);
   }
@@ -183,7 +268,9 @@ export class HandoffEngine {
     if (up.fromVariantId !== this.variantId || up.to.variantId === this.variantId) return;
     this.pending = up;
     this.ev.onDebug?.(`upgrade ${up.mode} → ${up.to.label}`);
-    if (up.mode === "natural-break") {
+    // Frame-exact handoffs need the element clock to be the film clock; compat
+    // streams (either side) switch at the next pause or seek instead.
+    if (up.mode === "natural-break" || this.compat || this.needsCompat(up.to)) {
       this.naturalBreak = up;
       return;
     }
@@ -317,7 +404,15 @@ export class HandoffEngine {
     try {
       const a = this.active;
       const wasPlaying = !a.paused;
-      const at = up.a * a.currentTime + up.b;
+      const from = this.now();
+      const at = up.a * from + up.b;
+      if (this.needsCompat(up.to)) {
+        await this.loadCompat(up.to, at, wasPlaying);
+        this.pending = null;
+        this.naturalBreak = null;
+        this.ev.onSwitched?.({ mode: "natural-break", fromVariantId: up.fromVariantId, toVariantId: up.to.variantId, gapMs: 0, droppedFrames: 0, atS: from }, up.to);
+        return;
+      }
       await this.prepareStandby(up, at);
       const s = this.standby;
       s.muted = false;
@@ -326,7 +421,10 @@ export class HandoffEngine {
       this.hide(a);
       if (wasPlaying) await s.play();
       this.naturalBreak = null;
-      this.finishSwitch(up, "natural-break", 0, a.currentTime);
+      this.offset = 0;
+      this.compat = false;
+      this.dropHls();
+      this.finishSwitch(up, "natural-break", 0, from);
     } catch (err) {
       this.ev.onDebug?.(`natural-break swap failed: ${(err as Error).message}`);
       this.resetStandby();
@@ -359,6 +457,7 @@ export class HandoffEngine {
   destroy() {
     this.destroyed = true;
     this.generation++;
+    this.dropHls();
     for (const v of this.els) {
       v.pause();
       v.removeAttribute("src");

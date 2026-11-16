@@ -7,6 +7,7 @@ import { api, fmtTime, img, progress, telemetry } from "../api";
 import { Spinner } from "../components/ui";
 import { useServerEvents } from "../events";
 import { isBack, KEY } from "../keys";
+import { audioIsSilent, needsCompat } from "../player/codecs";
 import { HandoffEngine } from "../player/handoff";
 
 const STEPS: { phase: PlayStatus["phase"][]; label: string }[] = [
@@ -113,7 +114,7 @@ function Player({ tmdbId, title, stream, startAtS, onExit }: { tmdbId: number; t
     (event: "heartbeat" | "pause" | "seek" | "stop" | "end") => {
       const e = engine.current;
       if (!e?.variantId) return;
-      void progress({ tmdbId, variantId: e.variantId, positionS: e.active.currentTime, durationS: e.active.duration || 0, event });
+      void progress({ tmdbId, variantId: e.variantId, positionS: e.now(), durationS: e.duration(), event });
     },
     [tmdbId],
   );
@@ -138,28 +139,49 @@ function Player({ tmdbId, title, stream, startAtS, onExit }: { tmdbId: number; t
         void telemetry({ kind: "handoff", tmdbId, ...r });
         (window as unknown as { __chillHandoff?: unknown[] }).__chillHandoff?.push(r);
       },
-      onError: async (_err, variantId) => {
-        // Original didn't decode: fall back to put.io's HLS.
-        setNote("Switching to a compatible stream…");
-        const fb = await api.fallback(variantId).catch(() => null);
-        if (fb?.state === "ready" && fb.url) {
-          const at = engine.current?.active.currentTime ?? startAtS;
-          const canNative = document.createElement("video").canPlayType("application/vnd.apple.mpegurl");
-          if (canNative) await engine.current?.replaceSource({ ...stream, url: fb.url, kind: "hls" }, at);
-          else {
-            const { default: Hls } = await import("hls.js");
-            const h = new Hls();
-            h.loadSource(fb.url);
-            h.attachMedia(engine.current!.active);
-          }
+      onError: async () => {
+        const e = engine.current;
+        if (!e) return;
+        // 1) The server's compat remux (same copy, AAC audio, MP4) — instant.
+        if (!e.isCompat) {
           setNote(null);
-        } else setNote(fb?.state === "pending" ? "put.io is converting this file. Try again in a few minutes." : "This file can't be played on this device.");
+          await e.switchToCompat().catch(() => undefined);
+          if (e.isCompat) return;
+        }
+        // 2) Last resort: put.io's own HLS conversion, retried while busy or converting.
+        await hlsFallback();
       },
       onDebug: (m) => console.debug("[handoff]", m),
-    });
+    }, needsCompat);
     engine.current = e;
     (window as unknown as { __chillEngine?: HandoffEngine }).__chillEngine = e;
     (window as unknown as { __chillHandoff?: unknown[] }).__chillHandoff ??= [];
+    const hlsFallback = async () => {
+      const at = engine.current?.now() ?? startAtS;
+      for (let attempt = 0; attempt < 12 && engine.current; attempt++) {
+        const fb = await api.fallback(engine.current.variantId).catch(() => null);
+        if (fb?.state === "ready" && fb.url) {
+          setNote(null);
+          await engine.current?.attachHls(fb.url, at);
+          return;
+        }
+        if (fb?.state !== "pending" && fb?.state !== "busy") break;
+        setNote(fb.state === "pending" ? "put.io is preparing a version this device can play…" : "Waiting for put.io…");
+        await new Promise((r) => setTimeout(r, Math.min(60_000, 10_000 * (attempt + 1))));
+      }
+      setNote("This file can't be played on this device.");
+    };
+    // Safety net: picture decoding but no sound (a codec canPlayType didn't
+    // warn about) → same copy, same moment, via the compat remux.
+    const silenceCheck = setInterval(() => {
+      const cur = engine.current;
+      if (!cur || cur.isCompat || cur.active.paused || cur.active.currentTime < 3) return;
+      clearInterval(silenceCheck); // judge once, after 3 s of real playback
+      if (audioIsSilent(cur.active)) {
+        console.debug("[handoff] no audio decoded: switching to compat stream");
+        void cur.switchToCompat();
+      }
+    }, 1000);
     void e.load(stream, startAtS).then(async () => {
       poke();
       report("heartbeat");
@@ -169,6 +191,7 @@ function Player({ tmdbId, title, stream, startAtS, onExit }: { tmdbId: number; t
     const hb = setInterval(() => report("heartbeat"), 10_000);
     return () => {
       clearInterval(hb);
+      clearInterval(silenceCheck);
       report("stop");
       e.destroy();
       engine.current = null;

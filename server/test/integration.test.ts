@@ -212,3 +212,21 @@ describe("race", () => {
     expect(st.phase).toBe("ready");
   });
 });
+
+describe("audio the browser can't decode (E-AC3 in MKV)", () => {
+  const PARASITE = 496243;
+  it("tells the player the real codecs, and serves a compat remux with AAC audio from an exact keyframe", async () => {
+    await api("POST", `/api/titles/${PARASITE}/play`);
+    await advance(10_000);
+    const st = await api<PlayStatus>("GET", `/api/titles/${PARASITE}/play`);
+    expect(st.phase).toBe("ready");
+    expect(st.stream).toMatchObject({ audioCodec: "eac3", container: "mkv", videoCodec: "h264" });
+
+    const start = await api<{ start: number; url: string }>("GET", `/api/stream/${st.stream!.variantId}/compat-start?t=31`);
+    expect(start.start).toBe(30); // 2 s GOP: the keyframe at or before 31 s
+    const { probe } = await import("../src/media/ffmpeg.js");
+    const p = await probe(base + start.url);
+    expect(p.audioCodec).toBe("aac");
+    expect(p.videoCodec).toBe("h264"); // copied, not re-encoded
+  });
+});

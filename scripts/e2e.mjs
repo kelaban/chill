@@ -102,6 +102,20 @@ try {
   await press("Escape");
   await page.waitForTimeout(1000);
 
+  console.log("audio a desktop browser can't decode (E-AC3 in MKV)");
+  await page.goto(`${base}/watch/496243`);
+  await page.waitForFunction(() => { const v = document.querySelector("video[data-active]"); return v && v.currentTime > 2; }, null, { timeout: 60000 });
+  await page.waitForTimeout(3000);
+  const aud = await page.evaluate(() => { const e = window.__chillEngine; const v = e.active; return { compat: e.isCompat, audioBytes: v.webkitAudioDecodedByteCount, now: e.now() }; });
+  check(aud.compat, "switched to the compat stream up front");
+  check(aud.audioBytes > 0, `audio is decoding (${aud.audioBytes} bytes)`);
+  await press("ArrowRight");
+  await page.waitForTimeout(2500);
+  const afterSeek = await page.evaluate(() => window.__chillEngine.now());
+  check(afterSeek > aud.now + 8, `seeking works on the compat stream (${aud.now.toFixed(1)} s → ${afterSeek.toFixed(1)} s)`);
+  await press("Escape");
+  await page.waitForTimeout(800);
+
   console.log("resume");
   const st = await (await fetch(`${base}/api/titles/949/play?profile=1`)).json();
   check(st.phase === "ready" && st.stream.startAtS > 10, `resume point kept (${st.stream?.startAtS?.toFixed(1)} s on ${st.stream?.label})`);

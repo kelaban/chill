@@ -91,6 +91,12 @@ export interface StreamInfo {
   dynamicRange: DynamicRange;
   startAtS: number;
   durationS: number | null;
+  /** Normalized audio codec (aac, ac3, eac3, dts, truehd, opus, …) or null if unknown. */
+  audioCodec: string | null;
+  /** Normalized video codec (h264, hevc, av1, …) or null if unknown. */
+  videoCodec: string | null;
+  /** Container family (mp4, mkv, …) or null if unknown. */
+  container: string | null;
 }
 
 export type DynamicRange = "SDR" | "HDR10" | "DV";

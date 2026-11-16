@@ -13,6 +13,9 @@ import { contentTypeFor, mediaInput } from "./services/media.js";
 import { availability, ranking } from "./services/releases.js";
 import { evictVariant, publishStorage, report, variant } from "./services/storage.js";
 import { pendingUpgrade } from "./services/upgrade.js";
+import { compatResponse, compatStart } from "./services/compat.js";
+
+const hlsCache = new Map<string, { url: string; until: number }>();
 
 const int = (s: string | undefined, d: number) => {
   const n = Number(s);
@@ -115,17 +118,42 @@ export function createApp(ctx: Ctx) {
     return c.redirect(url, 302);
   });
 
-  /** The player couldn't decode the original: fall back to put.io's HLS (conversion if needed). */
+  // Repackaged stream for players that can't decode the file's audio/container.
+  app.get("/api/stream/:variantId/compat-start", async (c) => {
+    const v = variant(ctx, c.req.param("variantId"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    const start = await compatStart(ctx, v, Number(c.req.query("t") ?? 0) || 0);
+    return c.json({ start, url: `/api/stream/${v.id}/compat?start=${start}` });
+  });
+  app.get("/api/stream/:variantId/compat", async (c) => {
+    const v = variant(ctx, c.req.param("variantId"));
+    if (!v) return c.json({ error: "not found" }, 404);
+    return compatResponse(ctx, v, Math.max(0, Number(c.req.query("start") ?? 0) || 0), c.req.raw.signal);
+  });
+
+  /**
+   * Last resort when even the compat stream fails: put.io's own HLS (converted
+   * by put.io), via chill.institute so the player never sees our put.io token.
+   * Both services rate-limit, so resolved URLs are cached in memory (never
+   * persisted or logged) and 429s come back as "busy" for the player to retry.
+   */
   app.post("/api/variants/:id/fallback", async (c) => {
     const v = variant(ctx, c.req.param("id"));
     if (!v?.putio_file_id) return c.json({ state: "unavailable" });
-    const r = await ctx.svc.chill.resolvePlayback(v.putio_file_id, "HLS");
-    if (r.kind === "ready") return c.json({ state: "ready", url: r.url, kind: "hls", subtitles: r.subtitles });
-    if (r.kind === "unavailable" && r.reason.includes("CONVERSION_REQUIRED")) {
-      const s = await ctx.svc.chill.startConversion(v.putio_file_id);
-      return c.json({ state: s });
+    const hit = hlsCache.get(v.id);
+    if (hit && hit.until > Date.now()) return c.json({ state: "ready", url: hit.url, kind: "hls" });
+    try {
+      const r = await ctx.svc.chill.resolvePlayback(v.putio_file_id, "HLS");
+      if (r.kind === "ready") {
+        hlsCache.set(v.id, { url: r.url, until: Date.now() + 10 * 60_000 });
+        return c.json({ state: "ready", url: r.url, kind: "hls", subtitles: r.subtitles });
+      }
+      if (r.kind === "unavailable" && r.reason.includes("CONVERSION_REQUIRED")) return c.json({ state: await ctx.svc.chill.startConversion(v.putio_file_id) });
+      return c.json({ state: r.kind });
+    } catch (err) {
+      if ((err as { status?: number }).status === 429) return c.json({ state: "busy" });
+      throw err;
     }
-    return c.json({ state: r.kind });
   });
 
   app.post("/api/progress", async (c) => {
