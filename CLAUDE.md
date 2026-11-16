@@ -78,7 +78,8 @@ alignment and the seamless switch, so most work never needs real credentials.
   its user agent reports **Chromium 132** (measured 2026-11-15). Vite
   `build.target: "chrome132"`. Still on Tailwind v3; v4 (needs 111) is now
   possible but not migrated. Keep animations to transforms/opacity (TV CPUs are weak);
-  test focus with D-pad *and* pointer.
+  test focus with D-pad *and* pointer. A pointer hover highlights but must never
+  scroll (DECISIONS D50); pointer users page rows with the ‹ › paddles and the wheel.
 - **Upgrades never ask.** A better copy swaps in seamlessly (aligned, on a scene
   cut). Don't add prompts or toasts for it; see `ARCHITECTURE.md` → *Seamless upgrade*.
 - **LAN-only.** Nothing is exposed to the internet; there is no remote access.

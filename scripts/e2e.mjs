@@ -84,6 +84,38 @@ try {
   check(true, "Back returns home");
   await page.screenshot({ path: path.join(out, "home.png") });
 
+  console.log("pointer-only browsing (Magic Remote)");
+  const scrollY = () => page.evaluate(() => { const r = document.getElementById("root"); return r && r.scrollHeight > r.clientHeight ? r.scrollTop : document.scrollingElement.scrollTop; });
+  await page.mouse.move(960, 300, { steps: 3 });
+  const low = await page.evaluate(() => {
+    const c = [...document.querySelectorAll("[data-testid^=card-]")].map((e) => ({ id: e.getAttribute("data-testid"), r: e.getBoundingClientRect() })).find((x) => x.r.top > 650 && x.r.top < 1000 && x.r.left > 80 && x.r.right < 1800);
+    return c ? { id: c.id, x: c.r.left + c.r.width / 2, y: Math.min(1070, c.r.top + 40) } : null;
+  });
+  const y0 = await scrollY();
+  if (low) {
+    await page.mouse.move(low.x, low.y, { steps: 6 });
+    await page.waitForTimeout(800);
+    check((await scrollY()) === y0 && (await focused()) === low.id, `hovering a card low on screen highlights it without scrolling (${low.id}, page stays at ${y0}px)`);
+    const rowId = await page.evaluate((id) => document.querySelector(`[data-testid=${id}]`).closest("[data-row]").getAttribute("data-row"), low.id);
+    const paddle = await page.$(`[data-testid=paddle-next-${rowId}]`);
+    check(!!paddle && (await paddle.isVisible()), `the row shows a › paddle for the pointer (${rowId})`);
+    if (paddle) {
+      const before = await page.evaluate((r) => document.querySelector(`[data-row=${r}] .no-scrollbar`).scrollLeft, rowId);
+      await paddle.click();
+      await page.waitForTimeout(900);
+      const after = await page.evaluate((r) => document.querySelector(`[data-row=${r}] .no-scrollbar`).scrollLeft, rowId);
+      check(after - before > 600 && after - before < 1700, `› pages the row by most of a screen (${before} → ${after}px)`);
+      check((await scrollY()) === y0, "…and the page itself stays put");
+    }
+  } else check(false, "found a card low on the home screen to hover");
+  await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(600);
+  const y1 = await scrollY();
+  check(y1 > y0 + 200 && y1 < y0 + 900, `the wheel scrolls the page a step (${y0} → ${y1}px)`);
+  await press("ArrowDown");
+  check(!(await page.evaluate(() => document.documentElement.classList.contains("pointer"))) && !(await page.$("[data-testid^=paddle-]:visible")), "a key press hides the pointer-only paddles");
+  await page.screenshot({ path: path.join(out, "home-pointer.png") });
+
   console.log("where it streams");
   await page.goto(`${base}/title/438631`);
   await page.waitForSelector("[data-testid=services]");

@@ -35,6 +35,19 @@ const tv = isTV() || (() => {
 })();
 if (tv) document.documentElement.classList.add("tv");
 
+// Pointer or keys? The Magic Remote's pointer shows when it moves and hides on a key
+// press; pointer-only controls (row paddles) follow the same rule.
+{
+  const root = document.documentElement;
+  let last: { x: number; y: number } | null = null;
+  window.addEventListener("mousemove", (e) => {
+    if (last && Math.abs(e.screenX - last.x) + Math.abs(e.screenY - last.y) < 2) return; // ignore synthetic jitter
+    last = { x: e.screenX, y: e.screenY };
+    root.classList.add("pointer");
+  }, { passive: true });
+  window.addEventListener("keydown", () => root.classList.remove("pointer"), { capture: true, passive: true });
+}
+
 init({ debug: false, visualDebug: false, throttle: 80, throttleKeypresses: true });
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });

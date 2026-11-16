@@ -1,6 +1,6 @@
 import type { Row as RowT, TitleSummary } from "@chill/shared";
 import { setFocus } from "@noriginmedia/norigin-spatial-navigation";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { img } from "../api";
 import { FocusGroup, Focusable } from "./Focusable";
@@ -66,15 +66,57 @@ export function Card({ t, onEnter, focusKey, wide, fill }: { t: TitleSummary; on
 }
 
 export function Row({ row, onOpen, wide }: { row: RowT; onOpen: (t: TitleSummary) => void; wide?: boolean }) {
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const [ends, setEnds] = useState({ start: true, end: true });
+  const measure = useCallback(() => {
+    const el = scroller.current;
+    if (el) setEnds({ start: el.scrollLeft <= 4, end: el.scrollLeft + el.clientWidth >= el.scrollWidth - 4 });
+  }, []);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    return () => el.removeEventListener("scroll", measure);
+  }, [measure, row.items.length]);
+  /** Pointer paging: most of a screen's width per click, smoothly. */
+  const page = (dir: 1 | -1) => scroller.current?.scrollBy({ left: dir * scroller.current.clientWidth * 0.8, behavior: "smooth" });
   return (
-    <section data-row={row.id} className="mb-10" data-testid={`row-${row.id}`}>
+    <section data-row={row.id} className="group/row relative mb-10" data-testid={`row-${row.id}`} onMouseEnter={measure}>
       <h2 className="mb-3 px-16 text-2xl font-bold">{row.title}</h2>
-      <FocusGroup focusKey={`row-${row.id}`} className="no-scrollbar flex gap-4 overflow-x-auto px-16 py-4">
-        {row.items.map((t) => (
-          <Card key={t.showId ?? t.tmdbId} t={t} wide={wide} onEnter={() => onOpen(t)} />
-        ))}
-      </FocusGroup>
+      <div className="relative">
+        <FocusGroup focusKey={`row-${row.id}`} innerRef={(el) => (scroller.current = el)} className="no-scrollbar flex gap-4 overflow-x-auto px-16 py-4">
+          {row.items.map((t) => (
+            <Card key={t.showId ?? t.tmdbId} t={t} wide={wide} onEnter={() => onOpen(t)} />
+          ))}
+        </FocusGroup>
+        {!ends.start && <Paddle dir={-1} rowId={row.id} onClick={() => page(-1)} />}
+        {!ends.end && <Paddle dir={1} rowId={row.id} onClick={() => page(1)} />}
+      </div>
     </section>
+  );
+}
+
+/**
+ * ‹ › at a row's edges for the pointer (the D-pad doesn't need them, so they
+ * aren't focusable). Shown while the pointer is in use and over the row; they
+ * sit in the row's side margins so they never cover a card's hover target.
+ */
+function Paddle({ dir, rowId, onClick }: { dir: 1 | -1; rowId: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={dir > 0 ? "More" : "Back"}
+      data-testid={`paddle-${dir > 0 ? "next" : "prev"}-${rowId}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`row-paddle absolute inset-y-4 z-20 flex w-14 items-center justify-center bg-black/60 text-5xl text-white opacity-0 transition-opacity hover:bg-black/80 group-hover/row:opacity-100 ${dir > 0 ? "right-0 rounded-l-md" : "left-0 rounded-r-md"}`}
+    >
+      {dir > 0 ? "›" : "‹"}
+    </button>
   );
 }
 

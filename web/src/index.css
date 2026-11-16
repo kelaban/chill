@@ -71,3 +71,8 @@ html.tv #root::-webkit-scrollbar {
   background: linear-gradient(90deg, rgba(20, 20, 20, 0.95) 0%, rgba(20, 20, 20, 0.6) 38%, rgba(20, 20, 20, 0) 70%),
     linear-gradient(0deg, #141414 0%, rgba(20, 20, 20, 0) 35%);
 }
+
+/* Row paddles are pointer-only: hidden (and unclickable) once a key is pressed. */
+html:not(.pointer) .row-paddle {
+  display: none;
+}
