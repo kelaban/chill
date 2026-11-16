@@ -1,7 +1,7 @@
 # On the home server:
 #   cp docker/.env.example docker/.env   # fill in the three tokens
 #   docker compose -f docker/compose.yml up -d
-# Demo (no tokens): CHILL_FAKE=1 docker compose -f docker/compose.yml up -d
+# Demo (no tokens): touch docker/.env && CHILL_FAKE=1 docker compose -f docker/compose.yml up -d
 services:
   chill:
     image: ghcr.io/kelaban/chill:latest
@@ -11,9 +11,10 @@ services:
     restart: unless-stopped
     ports:
       - "7878:7878"
+    # docker/.env holds your tokens (cp docker/.env.example docker/.env).
+    # Plain-string form so older Compose versions (< 2.24) accept it.
     env_file:
-      - path: .env
-        required: false
+      - .env
     environment:
       CHILL_FAKE: ${CHILL_FAKE:-0}
     volumes:
