@@ -199,6 +199,8 @@ export type ServerEvent =
   | { type: "play"; status: PlayStatus }
   | { type: "upgrade"; upgrade: UpgradeReady }
   | { type: "storage"; report: StorageReport }
+  /** Scrub previews just became available for a title's copies. */
+  | { type: "trickplay"; tmdbId: TmdbId }
   | { type: "hello" };
 
 export type Tier = "putio" | "local";
@@ -253,4 +255,21 @@ export interface HandoffTelemetry {
   droppedFrames: number;
   fromVariantId: string;
   toVariantId: string;
+}
+
+/**
+ * Scrub previews for the copy being played. Frame i of the sheets shows time
+ * i·intervalS of the file they came from; for player time t, that file's time
+ * is a·t + b (identity when the player is on that file).
+ */
+export interface TrickplayManifest {
+  intervalS: number;
+  width: number;
+  height: number;
+  cols: number;
+  rows: number;
+  count: number;
+  sheets: string[];
+  a: number;
+  b: number;
 }

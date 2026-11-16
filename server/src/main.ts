@@ -6,6 +6,7 @@ import { boot } from "./boot.js";
 import { loadConfig } from "./config.js";
 import { log, setLogLevel } from "./log.js";
 import { watchForUpdates } from "./services/selfUpdate.js";
+import { backfillTrickplay } from "./services/trickplay.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -20,6 +21,8 @@ async function main() {
   );
   ctx.jobs.start();
   ctx.jobs.enqueue("storage.cleanup", {}, { dedupeKey: "storage.cleanup", delayMs: 5000 });
+  const backfill = backfillTrickplay(ctx);
+  if (backfill) log.info("making scrub previews for existing home copies", { copies: backfill });
   setInterval(() => ctx.jobs.enqueue("storage.cleanup", {}, { dedupeKey: "storage.cleanup" }), 3_600_000).unref();
 
   let closing = false;

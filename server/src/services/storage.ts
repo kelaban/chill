@@ -6,6 +6,8 @@ import { admit, cacheEvictions, DEFAULT_EVICTION, planEviction, type Admission, 
 import { getSetting } from "../db.js";
 import { log } from "../log.js";
 import { forgetSubtitles } from "./subtitles.js";
+import { forgetTrickplay } from "./trickplay.js";
+import { composeAlignment } from "../domain/playback.js";
 
 const PLAYING_WINDOW_MS = 2 * 60_000;
 
@@ -29,6 +31,7 @@ export interface VariantRow {
   edition: string | null;
   probe_json: string | null;
   subs_checked_at: number | null;
+  trickplay_json: string | null;
   superseded_by: string | null;
   pinned: number;
   ready: number;
@@ -138,6 +141,7 @@ export async function evictVariant(ctx: Ctx, id: string, reason: string): Promis
     }
   }
   await forgetSubtitles(ctx, id);
+  await forgetTrickplay(ctx, id);
   ctx.db.transaction(() => {
     // Whatever this copy superseded is now superseded by what superseded it.
     ctx.db.prepare("UPDATE variants SET superseded_by = ? WHERE superseded_by = ?").run(v.superseded_by, id);
@@ -147,6 +151,17 @@ export async function evictVariant(ctx: Ctx, id: string, reason: string): Promis
       .get(id, id, v.superseded_by ?? "") as { to_id: string; a: number; b: number } | undefined;
     if (al) ctx.db.prepare("UPDATE watch_state SET position_s = MAX(0, ? * position_s + ?), last_variant_id = ? WHERE last_variant_id = ?").run(al.a, al.b, al.to_id, id);
     ctx.db.prepare("UPDATE watch_state SET last_variant_id = NULL WHERE last_variant_id = ?").run(id);
+    // Keep the survivors connected: X→this and this→Y become X→Y (fast copy → evicted 4K on put.io → 4K at home).
+    const into = ctx.db.prepare("SELECT from_id, a, b, residual_ms FROM variant_alignments WHERE to_id = ? AND aligned = 1").all(id) as { from_id: string; a: number; b: number; residual_ms: number | null }[];
+    const out = ctx.db.prepare("SELECT to_id, a, b, residual_ms FROM variant_alignments WHERE from_id = ? AND aligned = 1").all(id) as { to_id: string; a: number; b: number; residual_ms: number | null }[];
+    for (const x of into)
+      for (const y of out) {
+        if (x.from_id === y.to_id) continue;
+        const m = composeAlignment(x, y);
+        ctx.db
+          .prepare("INSERT OR IGNORE INTO variant_alignments (from_id, to_id, a, b, residual_ms, aligned, reason, created_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)")
+          .run(x.from_id, y.to_id, m.a, m.b, (x.residual_ms ?? 0) + (y.residual_ms ?? 0), `via ${id}`, ctx.clock.now());
+      }
     ctx.db.prepare("DELETE FROM variant_alignments WHERE from_id = ? OR to_id = ?").run(id, id);
     ctx.db.prepare("DELETE FROM variants WHERE id = ?").run(id);
     ctx.db.prepare("INSERT INTO storage_events (variant_id, tier, action, bytes, reason, at) VALUES (?,?,?,?,?,?)").run(id, v.location, "evict", v.size_bytes, reason, ctx.clock.now());

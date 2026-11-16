@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { serve, type ServerType } from "@hono/node-server";
-import type { PlayStatus, ServerEvent, StorageReport, UpgradeReady } from "@chill/shared";
+import type { PlayStatus, ServerEvent, StorageReport, TrickplayManifest, UpgradeReady } from "@chill/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { boot } from "../src/boot.js";
@@ -149,6 +149,25 @@ describe("play → instant → seamless upgrade → home copy", () => {
     // The latest upgrade points at the local copy.
     const last = ups[ups.length - 1]!;
     expect(last.to.label).toContain("Home");
+  });
+
+  it("makes scrub previews from the home copy, and maps them onto the fast copy being played", async () => {
+    await advance(10_000);
+    const local = ctx.db.prepare("SELECT id, trickplay_json FROM variants WHERE tmdb_id = ? AND location = 'local'").get(HEAT) as { id: string; trickplay_json: string | null };
+    expect(local.trickplay_json).not.toBeNull();
+    const own = await api<TrickplayManifest>("GET", `/api/stream/${local.id}/trickplay`);
+    expect(own).toMatchObject({ intervalS: 10, width: 320, a: 1, b: 0 });
+    expect(own.count).toBeGreaterThan(3);
+    // The put.io 4K copy that linked the two is gone (it's home), but the alignment
+    // survives its eviction: fast copy → home copy, with the 2.5 s lead-in.
+    const viaFast = await api<TrickplayManifest>("GET", `/api/stream/${instantId}/trickplay`);
+    expect(viaFast.a).toBeCloseTo(1, 3);
+    expect(viaFast.b).toBeCloseTo(2.5, 1);
+    expect(viaFast.sheets).toEqual(own.sheets);
+    const res = await fetch(base + own.sheets[0]!);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
+    expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(1000);
+    expect((await fetch(`${base}/api/trickplay/${local.id}/..%2Fx.jpg`)).status).toBe(404);
   });
 
   it("keeps the playing put.io copy until playback stops, then cleans staging", async () => {
@@ -331,6 +350,7 @@ describe("subtitles", () => {
     await api("POST", `/api/variants/${v.id}/evict`);
     expect(fs.existsSync(path.join(ctx.cfg.libraryDir, v.local_path.replace(/\.mp4$/, ".en.srt")))).toBe(false);
     expect(ctx.db.prepare("SELECT COUNT(*) FROM subtitles WHERE variant_id = ?").pluck().get(v.id)).toBe(0);
+    expect(fs.existsSync(path.join(ctx.cfg.cacheDir, "trickplay", v.id))).toBe(false); // its scrub previews too
   });
 });
 

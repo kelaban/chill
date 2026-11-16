@@ -9,7 +9,6 @@
 - **Natural-language search** in the search box, backed by the same model.
 - **Learned "instant" priors.** Record time-to-ready per indexer / size / age and
   feed it back into the ranker's instant score.
-- **Seek-bar thumbnails** (trickplay) generated for local variants.
 - **Ratings sync** with Trakt / Letterboxd; import watch history.
 - **Lists from chill.institute "binges"** and IMDb/Letterboxd lists as home rows.
 - **Collections** (TMDB collections: "The Godfather Collection") as rows.
@@ -23,7 +22,7 @@
   protocol so Stremio's LG-store app is a second way onto the TV (no Developer
   Mode). Loses the seamless upgrade; keeps browse, Play and resume. Reference:
   chill-institute/chill-stremio (MIT).
-- **Trickplay thumbnails, subtitles picker, audio track picker** (Phase 4).
+- **Audio track picker** (Phase 4). (Scrub previews and the subtitles picker are built.)
 - **Subtitles, round two:** OpenSubtitles lookup when a copy has no English track;
   burn-in or OCR for image-only (PGS) subtitles; prefer releases that carry
   English subtitles for foreign films; a per-profile subtitle language.

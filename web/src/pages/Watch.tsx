@@ -9,6 +9,8 @@ import { useServerEvents } from "../events";
 import { isBack, KEY } from "../keys";
 import { audioIsSilent, needsCompat } from "../player/codecs";
 import { HandoffEngine } from "../player/handoff";
+import { THUMB_SCALE, Thumb } from "../player/trickplay";
+import type { TrickplayManifest } from "@chill/shared";
 
 const STEPS: { phase: PlayStatus["phase"][]; label: string }[] = [
   { phase: ["searching"], label: "Finding the best copy" },
@@ -134,6 +136,19 @@ function Player({ tmdbId, title, subtitleLine, stream, startAtS, onExit, onNext 
   const [playing, setPlaying] = useState(false);
   const [osd, setOsd] = useState(true);
   const [label, setLabel] = useState(stream.label);
+  // Scrub previews for the copy playing now (re-fetched after a switch; retried each minute until a home copy has them).
+  const [variantId, setVariantId] = useState(stream.variantId);
+  const thumbs = useQuery({
+    queryKey: ["trickplay", variantId],
+    queryFn: () => api.trickplay(variantId),
+    refetchInterval: (q) => (q.state.data ? false : 60_000),
+  });
+  useServerEvents((ev) => {
+    if (ev.type === "trickplay" && ev.tmdbId === tmdbId && !thumbs.data) void thumbs.refetch();
+  });
+  /** Remote scrubbing: Left/Right add up to a target, shown with its preview; the seek happens once, 0.7 s after the last press. */
+  const [pending, setPending] = useState<number | null>(null);
+  const pendingRef = useRef<{ t: number; presses: number; timer?: ReturnType<typeof setTimeout> } | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const osdTimer = useRef<ReturnType<typeof setTimeout>>();
   // Subtitles + audio
@@ -189,6 +204,7 @@ function Player({ tmdbId, title, subtitleLine, stream, startAtS, onExit, onNext 
       onCues: (c) => setCues(c),
       onSwitched: (r, to) => {
         setLabel(to.label);
+        setVariantId(to.variantId);
         setSubs(to.subtitles ?? []);
         setAudio({ codec: to.audioCodec, channels: to.audioChannels });
         setPath(engine.current?.isCompat ? "compat" : "direct");
@@ -294,16 +310,18 @@ function Player({ tmdbId, title, subtitleLine, stream, startAtS, onExit, onNext 
       if (k.key === "ArrowDown") {
         const cur = e.subtitle;
         setMenu(cur ? Math.max(0, subsRef.current.findIndex((t) => t.id === cur.id) + 1) : 0);
-      } else if (isBack(k) || k.keyCode === KEY.STOP) {
+      } else if (pendingRef.current && isBack(k)) cancelScrub();
+      else if (pendingRef.current && (k.key === "Enter" || k.key === " ")) commitScrub();
+      else if (isBack(k) || k.keyCode === KEY.STOP) {
         k.preventDefault();
         onExit();
       } else if (k.key === "Enter" || k.key === " " || k.keyCode === KEY.PLAY_PAUSE) e.toggle();
       else if (k.keyCode === KEY.PLAY) e.play();
       else if (k.keyCode === KEY.PAUSE) e.pause();
-      else if (k.key === "ArrowRight") (e.seekBy(10), report("seek"));
-      else if (k.key === "ArrowLeft") (e.seekBy(-10), report("seek"));
-      else if (k.keyCode === KEY.FF) (e.seekBy(60), report("seek"));
-      else if (k.keyCode === KEY.RW) (e.seekBy(-60), report("seek"));
+      else if (k.key === "ArrowRight") nudge(1, 10);
+      else if (k.key === "ArrowLeft") nudge(-1, 10);
+      else if (k.keyCode === KEY.FF) nudge(1, 60);
+      else if (k.keyCode === KEY.RW) nudge(-1, 60);
       else return;
       k.preventDefault();
     };
@@ -311,6 +329,37 @@ function Player({ tmdbId, title, subtitleLine, stream, startAtS, onExit, onNext 
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onExit, poke, report]);
+
+  /** One remote press while scrubbing: steps grow when held (10 s, then 30 s, then 60 s). */
+  function nudge(dir: 1 | -1, base: number) {
+    const e = engine.current;
+    if (!e) return;
+    const p = pendingRef.current ?? { t: e.now(), presses: 0 };
+    p.presses++;
+    const step = base >= 60 ? base : p.presses > 15 ? 60 : p.presses > 5 ? 30 : base;
+    const d = e.duration() || dur;
+    p.t = Math.min(Math.max(0, p.t + dir * step), d ? Math.max(0, d - 1) : Infinity);
+    if (p.timer) clearTimeout(p.timer);
+    p.timer = setTimeout(commitScrub, 700);
+    pendingRef.current = p;
+    setPending(p.t);
+  }
+  function commitScrub() {
+    const p = pendingRef.current;
+    if (!p) return;
+    if (p.timer) clearTimeout(p.timer);
+    pendingRef.current = null;
+    setPending(null);
+    engine.current?.seekTo(p.t);
+    setPos(p.t);
+    report("seek");
+  }
+  function cancelScrub() {
+    const p = pendingRef.current;
+    if (p?.timer) clearTimeout(p.timer);
+    pendingRef.current = null;
+    setPending(null);
+  }
 
   /** Choose item `i` of [Off, ...subs], show it, and remember it for this title. */
   function chooseSub(i: number) {
@@ -342,6 +391,8 @@ function Player({ tmdbId, title, subtitleLine, stream, startAtS, onExit, onNext 
           <Scrubber
             pos={pos}
             dur={dur}
+            pending={pending}
+            thumbs={thumbs.data ?? null}
             active={osd || !playing}
             onActivity={poke}
             onSeek={(t) => {
@@ -443,7 +494,9 @@ export function cueHtml(text: string): string {
  * drag to scrub with a time preview. Inert while the controls are hidden so a
  * stray click on the picture never seeks.
  */
-function Scrubber({ pos, dur, active, onSeek, onActivity }: { pos: number; dur: number; active: boolean; onSeek: (t: number) => void; onActivity: () => void }) {
+function Scrubber({
+  pos, dur, pending, thumbs, active, onSeek, onActivity,
+}: { pos: number; dur: number; pending: number | null; thumbs: TrickplayManifest | null; active: boolean; onSeek: (t: number) => void; onActivity: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
@@ -451,8 +504,9 @@ function Scrubber({ pos, dur, active, onSeek, onActivity }: { pos: number; dur: 
     const r = ref.current?.getBoundingClientRect();
     return r && r.width > 0 ? Math.min(1, Math.max(0, (clientX - r.left) / r.width)) : 0;
   };
-  const shown = drag ?? (dur ? pos / dur : 0);
-  const tip = drag ?? hover;
+  const remote = pending !== null && dur ? pending / dur : null;
+  const shown = drag ?? remote ?? (dur ? pos / dur : 0);
+  const tip = drag ?? remote ?? hover;
   return (
     <div
       ref={ref}
@@ -485,16 +539,23 @@ function Scrubber({ pos, dur, active, onSeek, onActivity }: { pos: number; dur: 
       onPointerCancel={() => setDrag(null)}
       onPointerLeave={() => setHover(null)}
     >
-      <div className={`relative overflow-visible rounded-full bg-white/25 transition-[height] ${hover !== null || drag !== null ? "h-3" : "h-2"}`}>
+      <div className={`relative overflow-visible rounded-full bg-white/25 transition-[height] ${tip !== null ? "h-3" : "h-2"}`}>
         <div className="h-full rounded-full bg-accent" style={{ width: `${shown * 100}%` }} />
         <div
-          className={`absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-lg transition-opacity ${hover !== null || drag !== null ? "opacity-100" : "opacity-0"}`}
+          className={`absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-lg transition-opacity ${tip !== null ? "opacity-100" : "opacity-0"}`}
           style={{ left: `${shown * 100}%` }}
         />
       </div>
       {tip !== null && dur > 0 && (
-        <div className="absolute bottom-full mb-3 -translate-x-1/2 rounded bg-black/85 px-3 py-1 text-xl tabular-nums" style={{ left: `${tip * 100}%` }} data-testid="scrub-time">
-          {fmtTime(tip * dur)}
+        // The preview stays inside the bar's width at the ends.
+        <div
+          className="pointer-events-none absolute bottom-full mb-3 flex -translate-x-1/2 flex-col items-center gap-2"
+          style={{ left: thumbs ? `clamp(${(thumbs.width * THUMB_SCALE) / 2}px, ${tip * 100}%, calc(100% - ${(thumbs.width * THUMB_SCALE) / 2}px))` : `${tip * 100}%` }}
+        >
+          {thumbs && <Thumb m={thumbs} t={tip * dur} />}
+          <div className="rounded bg-black/85 px-3 py-1 text-xl tabular-nums" data-testid="scrub-time">
+            {fmtTime(tip * dur)}
+          </div>
         </div>
       )}
     </div>

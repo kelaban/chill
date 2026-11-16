@@ -185,6 +185,38 @@ try {
   await page.waitForTimeout(800);
   const dragged = await page.evaluate(() => window.__chillEngine.now());
   check(Math.abs(dragged - durS * 0.6) < 2, `drag to 60% scrubs to ${dragged.toFixed(1)} s`);
+
+  console.log("scrub previews");
+  // This replay came from put.io again (playing Parasite emptied the home cache); previews follow its new home copy.
+  for (let i = 0; i < 60; i++) {
+    const id = await page.evaluate(() => window.__chillEngine.variantId);
+    if ((await fetch(`${base}/api/stream/${id}/trickplay`)).ok) break;
+    await page.waitForTimeout(1000);
+  }
+  await page.waitForTimeout(1500); // the player hears about them over SSE, without a reload
+  await page.mouse.move(960, 400);
+  await page.mouse.move(bar.x + bar.width * 0.4, bar.y + bar.height / 2, { steps: 4 });
+  const thumb = await page.waitForSelector("[data-testid=scrub-thumb]", { timeout: 5000 }).catch(() => null);
+  const why = thumb ? "" : await page.evaluate(async () => { const id = window.__chillEngine.variantId; const r = await fetch(`/api/stream/${id}/trickplay`); return ` (playing ${id}: manifest ${r.status}; tip ${document.querySelector("[data-testid=scrub-time]")?.textContent ?? "none"})`; });
+  check(!!thumb, `hovering the bar shows a preview picture${why}`);
+  if (thumb) {
+    const sheet = await thumb.getAttribute("data-sheet");
+    const r = await page.evaluate(async (u) => { const res = await fetch(u); return { status: res.status, type: res.headers.get("content-type") }; }, sheet);
+    check(r.status === 200 && r.type === "image/jpeg", `the preview sheet loads (${sheet})`);
+    await page.screenshot({ path: path.join(out, "scrub-preview.png") });
+  }
+  await page.mouse.click(bar.x + bar.width * 0.25, bar.y + bar.height / 2); // back to 25%, well clear of the end
+  await page.mouse.move(bar.x + bar.width * 0.4, bar.y - 300); // off the bar
+  await page.waitForTimeout(1000);
+  const beforeRemote = await page.evaluate(() => window.__chillEngine.now());
+  await press("ArrowRight", 3);
+  await page.waitForSelector("[data-testid=scrub-time]");
+  const shownTarget = await page.textContent("[data-testid=scrub-time]");
+  const midway = await page.evaluate(() => window.__chillEngine.now());
+  check(Math.abs(midway - beforeRemote) < 2 && !!(await page.$("[data-testid=scrub-thumb]")), `Right ×3 shows a target (${shownTarget}) with its preview, without seeking yet`);
+  await page.waitForTimeout(1500);
+  const afterRemote = await page.evaluate(() => window.__chillEngine.now());
+  check(afterRemote > beforeRemote + 27 && afterRemote < beforeRemote + 34, `…then seeks once, 30 s ahead (${beforeRemote.toFixed(1)} → ${afterRemote.toFixed(1)} s)`);
   await press("Escape");
   await page.waitForTimeout(800);
 
@@ -222,6 +254,7 @@ try {
   failures.push(String(err));
   console.error(err);
 } finally {
+  fs.writeFileSync(path.join(out, "server.log"), log); // for diagnosing a failed run
   server.kill("SIGTERM");
   fs.rmSync(data, { recursive: true, force: true });
 }

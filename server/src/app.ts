@@ -15,6 +15,7 @@ import { evictVariant, publishStorage, report, variant } from "./services/storag
 import { pendingUpgrade } from "./services/upgrade.js";
 import { compatResponse, compatStart } from "./services/compat.js";
 import { saveChoice, vttFor } from "./services/subtitles.js";
+import { manifestFor, trickplayDir } from "./services/trickplay.js";
 import { isEpisode, nextEpisode, searchShows, seasonEpisodes, showDetail, showsHome } from "./services/shows.js";
 
 const hlsCache = new Map<string, { url: string; until: number }>();
@@ -137,6 +138,19 @@ export function createApp(ctx: Ctx) {
   });
 
   // Repackaged stream for players that can't decode the file's audio/container.
+  // ---- scrub previews
+  app.get("/api/stream/:variantId/trickplay", (c) => {
+    const m = manifestFor(ctx, c.req.param("variantId"));
+    return m ? c.json(m) : c.json({ error: "no previews yet" }, 404);
+  });
+  app.get("/api/trickplay/:variantId/:sheet", async (c) => {
+    const sheet = c.req.param("sheet");
+    if (!/^\d{3}\.jpg$/.test(sheet)) return c.json({ error: "not found" }, 404);
+    const body = await fs.promises.readFile(path.join(trickplayDir(ctx, c.req.param("variantId")), sheet)).catch(() => null);
+    if (!body) return c.json({ error: "not found" }, 404);
+    return c.body(body, 200, { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=31536000, immutable" });
+  });
+
   app.get("/api/stream/:variantId/compat-start", async (c) => {
     const v = variant(ctx, c.req.param("variantId"));
     if (!v) return c.json({ error: "not found" }, 404);

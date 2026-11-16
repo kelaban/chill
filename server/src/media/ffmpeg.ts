@@ -1,13 +1,19 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import type { DynamicRange } from "@chill/shared";
 
 // Thin wrappers around ffprobe/ffmpeg. Inputs may be local paths or HTTP(S)
 // URLs (ffmpeg range-reads remote files, so we never download a put.io copy
 // just to align it).
 
-function run(cmd: string, args: string[], opts: { stdout?: "buffer" | "text"; timeoutMs?: number } = {}): Promise<{ stdout: Buffer; stderr: string }> {
+function run(cmd: string, args: string[], opts: { stdout?: "buffer" | "text"; timeoutMs?: number; nice?: number } = {}): Promise<{ stdout: Buffer; stderr: string }> {
   return new Promise((resolve, reject) => {
     const p = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    if (opts.nice && p.pid)
+      try {
+        os.setPriority(p.pid, opts.nice); // background work yields to playback and the compat remux
+      } catch {}
     const out: Buffer[] = [];
     let err = "";
     const timer = setTimeout(() => p.kill("SIGKILL"), opts.timeoutMs ?? 300_000);
@@ -126,6 +132,38 @@ export async function detectCuts(input: string, startS: number, durS: number, th
 export async function extractSubtitle(input: string, index: number): Promise<string> {
   const { stdout } = await run("ffmpeg", ["-v", "error", "-nostdin", "-i", input, "-map", `0:s:${index}`, "-f", "webvtt", "pipe:1"], { timeoutMs: 600_000 });
   return stdout.toString("utf8");
+}
+
+export interface SheetLayout {
+  intervalS: number;
+  width: number;
+  height: number;
+  cols: number;
+  rows: number;
+}
+
+/**
+ * Scrub-preview sheets: a frame every `intervalS` (keyframes only, so it's a
+ * fast decode), scaled to `width`, tiled cols×rows into `outDir/NNN.jpg`.
+ * Frame i shows the keyframe at or just before i·intervalS (`round=up`; the
+ * default takes the *last* keyframe of each window, up to a whole interval late). HDR is tone-mapped to SDR, falling back to
+ * plain scaling if this ffmpeg can't. Returns the number of sheets written.
+ */
+export async function trickplaySheets(input: string, outDir: string, l: SheetLayout, hdr: boolean): Promise<number> {
+  const scale = `scale=${l.width}:${l.height}:flags=bilinear`;
+  const tonemap = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p";
+  const attempt = (vf: string) =>
+    run(
+      "ffmpeg",
+      [
+        "-v", "error", "-nostdin", "-y", "-threads", "2", "-skip_frame", "nokey", "-i", input, "-an", "-sn", "-dn", "-map", "0:v:0",
+        "-vf", `fps=1/${l.intervalS}:round=up,${vf},tile=${l.cols}x${l.rows}`, "-fps_mode", "vfr", "-q:v", "6", `${outDir}/%03d.jpg`,
+      ],
+      { timeoutMs: 3_600_000, nice: 10 },
+    );
+  if (hdr) await attempt(`${scale},${tonemap}`).catch(() => attempt(scale));
+  else await attempt(scale);
+  return (await fs.promises.readdir(outDir)).filter((f) => /^\d{3}\.jpg$/.test(f)).length;
 }
 
 export async function hasFfmpeg(): Promise<boolean> {

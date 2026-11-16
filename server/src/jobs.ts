@@ -38,7 +38,7 @@ export class Jobs {
   private timer: NodeJS.Timeout | null = null;
   private stopped = true;
   private wake: (() => void) | null = null;
-  readonly singleLanes = new Set(["mirror", "upgrade"]);
+  readonly singleLanes = new Set(["mirror", "upgrade", "trickplay"]);
 
   constructor(
     private db: DB,

@@ -19,6 +19,7 @@ import { registerReleaseJobs } from "./services/releases.js";
 import { registerStorageJobs } from "./services/storage.js";
 import { registerUpgradeJobs } from "./services/upgrade.js";
 import { registerSubtitleJobs } from "./services/subtitles.js";
+import { registerTrickplayJobs } from "./services/trickplay.js";
 
 export interface BootOptions {
   db?: DB;
@@ -79,5 +80,6 @@ export async function boot(cfg: Config, o: BootOptions = {}): Promise<Ctx> {
   registerUpgradeJobs(ctx);
   registerStorageJobs(ctx);
   registerSubtitleJobs(ctx);
+  registerTrickplayJobs(ctx);
   return ctx;
 }

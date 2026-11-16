@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { alignFromWindows, crossCorrelate, fitLinear } from "../src/domain/align.js";
 import { libraryPath } from "../src/domain/naming.js";
-import { decideHandoffMode, isWatched, mapPosition, nextCut, type PlayableVariant, selectVariant } from "../src/domain/playback.js";
+import { alignmentBetween, composeAlignment, decideHandoffMode, isWatched, mapPosition, nextCut, type PlayableVariant, selectVariant } from "../src/domain/playback.js";
 
 const pv = (id: string, o: Partial<PlayableVariant>): PlayableVariant => ({
   id, tier: "putio", quality: "instant", resolution: 1080, dynamicRange: "SDR", durationS: 6000, ready: true, superseded: false, ...o,
@@ -127,5 +127,33 @@ describe("TV naming", () => {
       "TV Shows/Stranger Things (2016)/Season 01/Stranger Things (2016) - S01E02 - Chapter Two The Weirdo on Maple Street.mkv",
     );
     expect(episodeLibraryPath("Show", null, 10, 1, null, "mp4")).toBe("TV Shows/Show/Season 10/Show - S10E01.mp4");
+  });
+});
+
+describe("alignmentBetween: mapping a copy's time onto another's", () => {
+  const e = (from: string, to: string, a: number, b: number) => ({ from, to, a, b });
+  const at = (m: { a: number; b: number } | null, t: number) => (m ? m.a * t + m.b : null);
+
+  it("same copy is identity; a direct edge maps; the reverse edge inverts", () => {
+    expect(alignmentBetween([], "x", "x")).toEqual({ a: 1, b: 0 });
+    const edges = [e("fast", "uhd", 1.001, 2.5)];
+    expect(at(alignmentBetween(edges, "fast", "uhd"), 100)).toBeCloseTo(102.6, 6);
+    expect(at(alignmentBetween(edges, "uhd", "fast"), 102.6)).toBeCloseTo(100, 6);
+  });
+
+  it("chains through a middle copy (fast → 4K on put.io → same 4K at home)", () => {
+    const edges = [e("fast", "uhd-putio", 1, 2.5), e("uhd-putio", "uhd-home", 1, 0)];
+    expect(at(alignmentBetween(edges, "fast", "uhd-home"), 40)).toBeCloseTo(42.5, 6);
+    expect(at(alignmentBetween(edges, "uhd-home", "fast"), 42.5)).toBeCloseTo(40, 6);
+  });
+
+  it("unconnected copies get nothing (no wrong pictures)", () => {
+    expect(alignmentBetween([e("a", "b", 1, 0)], "a", "c")).toBeNull();
+    expect(alignmentBetween([e("a", "b", 1, 0), e("b", "c", 1, 0), e("c", "d", 1, 0), e("d", "z", 1, 0)], "a", "z")).toBeNull(); // > 3 hops
+  });
+
+  it("composition agrees with applying one mapping after the other", () => {
+    const m = composeAlignment({ a: 1.04, b: -3 }, { a: 0.99, b: 7 });
+    expect(m.a * 50 + m.b).toBeCloseTo(0.99 * (1.04 * 50 - 3) + 7, 9);
   });
 });

@@ -1,5 +1,5 @@
 import type {
-  Availability, EpisodeItem, HomeResponse, PlayStatus, Profile, Row, ShowDetail, StorageReport, TitleDetail, TitleSummary, UpgradeReady,
+  Availability, EpisodeItem, HomeResponse, PlayStatus, Profile, Row, ShowDetail, StorageReport, TitleDetail, TitleSummary, TrickplayManifest, UpgradeReady,
 } from "@chill/shared";
 
 export function profileId(): number {
@@ -37,6 +37,8 @@ export interface Health {
 }
 
 export const api = {
+  /** Scrub previews for the copy being played, or null until a home copy has them. */
+  trickplay: (variantId: string) => req<TrickplayManifest>("GET", `/api/stream/${encodeURIComponent(variantId)}/trickplay`).catch(() => null),
   profiles: () => req<Profile[]>("GET", "/api/profiles"),
   addProfile: (name: string, color: string) => req<Profile>("POST", "/api/profiles", { name, color }),
   home: () => req<HomeResponse>("GET", "/api/home"),

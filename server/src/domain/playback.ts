@@ -25,6 +25,46 @@ export interface Alignment {
   b: number;
 }
 
+export interface AlignmentEdge extends Alignment {
+  from: string;
+  to: string;
+}
+
+/** `t ↦ a·t + b` applied after `first`. */
+export const composeAlignment = (first: Alignment, then: Alignment): Alignment => ({ a: then.a * first.a, b: then.a * first.b + then.b });
+export const invertAlignment = (x: Alignment): Alignment => ({ a: 1 / x.a, b: -x.b / x.a });
+
+/**
+ * The mapping from copy `from`'s timeline to copy `to`'s, through measured
+ * alignments in either direction (fast copy → 4K on put.io → same 4K at home),
+ * or null when they aren't connected within `maxHops`.
+ */
+export function alignmentBetween(edges: AlignmentEdge[], from: string, to: string, maxHops = 3): Alignment | null {
+  if (from === to) return { a: 1, b: 0 };
+  const next = new Map<string, { id: string; m: Alignment }[]>();
+  const add = (x: string, y: string, m: Alignment) => next.set(x, [...(next.get(x) ?? []), { id: y, m }]);
+  for (const e of edges) {
+    if (!(e.a > 0)) continue;
+    add(e.from, e.to, e);
+    add(e.to, e.from, invertAlignment(e));
+  }
+  let frontier: { id: string; m: Alignment }[] = [{ id: from, m: { a: 1, b: 0 } }];
+  const seen = new Set([from]);
+  for (let hop = 0; hop < maxHops && frontier.length; hop++) {
+    const nextFrontier: { id: string; m: Alignment }[] = [];
+    for (const f of frontier)
+      for (const n of next.get(f.id) ?? []) {
+        if (seen.has(n.id)) continue;
+        const m = composeAlignment(f.m, n.m);
+        if (n.id === to) return m;
+        seen.add(n.id);
+        nextFrontier.push({ id: n.id, m });
+      }
+    frontier = nextFrontier;
+  }
+  return null;
+}
+
 /**
  * Where to start the `to` copy, given a position saved against the `from` copy.
  * Aligned pairs map exactly (5 s rewind); unaligned pairs whose durations differ

@@ -8,6 +8,7 @@ import { log } from "../log.js";
 import { queueUpgradeIfPlaying, supersedeLower } from "./acquirer.js";
 import { download } from "./downloader.js";
 import { discover as discoverSubtitles, saveSidecars } from "./subtitles.js";
+import { queueTrickplay } from "./trickplay.js";
 import { admitAndMakeRoom, publishStorage, variant } from "./storage.js";
 
 /** Copy a put.io variant to the home library, verified, Plex-named. */
@@ -86,6 +87,7 @@ export function registerMirrorJobs(ctx: Ctx) {
     await discoverSubtitles(ctx, variant(ctx, lid)!).catch((err) => log.warn("subtitle discovery failed", { variant: lid, err }));
 
     queueUpgradeIfPlaying(ctx, v.tmdb_id, lid);
+    queueTrickplay(ctx, lid);
     ctx.jobs.enqueue("storage.cleanup", {}, { dedupeKey: "storage.cleanup", delayMs: 1000 });
     publishStorage(ctx);
   });
