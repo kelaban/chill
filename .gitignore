@@ -1,0 +1,8 @@
+node_modules/
+dist/
+server/public/
+.env
+*.ipk
+/data/
+spikes/
+.DS_Store
