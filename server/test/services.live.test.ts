@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { chillClient } from "../src/adapters/chill.js";
 import { putioClient } from "../src/adapters/putio.js";
 import { tmdbClient } from "../src/adapters/tmdb.js";
+import { gatedCatalog } from "../src/adapters/catalogGate.js";
+import { cinemetaClient } from "../src/adapters/cinemeta.js";
+import { providerServices } from "../src/domain/services.js";
 import { HttpError } from "../src/http.js";
 import { rank } from "../src/domain/ranker.js";
 
@@ -25,12 +28,53 @@ const unauthorized = (e: unknown) => e instanceof HttpError && (e.status === 401
 const SINTEL = "magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10&dn=Sintel&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=wss%3A%2F%2Ftracker.openwebtorrent.com";
 
 describe("TMDB (live)", () => {
-  it("searches and fetches details", async (t) => {
-    const tmdb = tmdbClient(tok("TMDB_TOKEN"));
-    const r = await tmdb.search("Heat").catch((e) => (unauthorized(e) ? t.skip() : Promise.reject(e)));
-    expect(r!.some((m) => m.id === 949)).toBe(true);
-    const d = await tmdb.movie(949);
+  // Every TMDB feature chill uses, through the same client and gate production runs.
+  const tmdb = tmdbClient(tok("TMDB_TOKEN"));
+  const keyOk = () => tmdb.verify().then(() => true, (e) => (unauthorized(e) ? false : Promise.reject(e)));
+
+  it("the key check passes, and the gate turns TMDB on", async (t) => {
+    if (!(await keyOk())) return t.skip();
+    const ids = new Map<number, string>();
+    const store = { imdbFor: (id: number) => ids.get(id) ?? null, remember: (id: number, imdb: string) => void ids.set(id, imdb) };
+    const { api, gate } = gatedCatalog(tmdb, cinemetaClient(store), store);
+    expect(await gate.verify()).toBe("ok");
+    expect(gate.source()).toBe("tmdb");
+    const d = await api.movie(949);
     expect(d.imdb_id).toBe("tt0113277");
+    expect(ids.get(949)).toBe("tt0113277"); // remembered, so Cinemeta could answer for it later
+  });
+
+  it("searches, lists, discovers and fetches details with credits and recommendations", async (t) => {
+    if (!(await keyOk())) return t.skip();
+    expect((await tmdb.search("Heat")).some((m) => m.id === 949)).toBe(true);
+    expect((await tmdb.list("trending")).length).toBeGreaterThan(10);
+    const action = await tmdb.discover({ genre: 28 });
+    expect(action.results.every((m) => m.genre_ids?.includes(28))).toBe(true);
+    expect((await tmdb.genres()).some((g) => g.id === 878)).toBe(true);
+    const d = await tmdb.movie(949);
+    expect(d.credits?.crew.some((c) => c.job === "Director" && c.name === "Michael Mann")).toBe(true);
+    expect(d.recommendations?.results.length).toBeGreaterThan(0);
+    expect(d.original_language).toBe("en");
+    expect((await tmdb.byImdb("tt1160419"))?.id).toBe(438631);
+  });
+
+  it("says where a film streams, in a shape providerServices understands", async (t) => {
+    if (!(await keyOk())) return t.skip();
+    const p = await tmdb.watchProviders!(438631, "US");
+    expect(p).not.toBeNull();
+    const on = providerServices(p);
+    console.log(`TMDB: Dune streams on ${on.services.map((s) => s.name).join(", ") || "nothing"}; stores ${on.stores.map((s) => s.name).join(", ") || "—"}`);
+    expect(on.services.length + on.stores.length).toBeGreaterThan(0);
+    // Every provider TMDB lists has an id and a name (what the mapping keys on).
+    for (const x of [...(p!.flatrate ?? []), ...(p!.rent ?? []), ...(p!.buy ?? [])]) expect(typeof x.provider_id === "number" && !!x.provider_name).toBe(true);
+  });
+
+  it("serves posters without the key (image.tmdb.org)", async (t) => {
+    if (!(await keyOk())) return t.skip();
+    const d = await tmdb.movie(949);
+    const img = await tmdb.image("w185", d.poster_path!);
+    expect(img.contentType).toMatch(/^image\//);
+    expect(img.body.length).toBeGreaterThan(1000);
   });
 });
 
