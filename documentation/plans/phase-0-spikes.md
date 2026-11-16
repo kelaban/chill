@@ -63,9 +63,13 @@ only the decision record below survives.
   are unblocked (D1). Build target raised to `chrome132`; Tailwind still v3.
 - Developer Mode on; TV registered as ares device `tv` (192.168.1.193:9922). The
   key passphrase is case-sensitive — enter it exactly as shown (upper case).
-- `/var/luna/preferences/devmode_enabled` is readable (64-char token), so
-  `renew-devmode.sh` can at least fetch the token; the renewal call itself is
-  still unverified.
+- **Developer Mode renewal works** (step 6). The session is **1000 h** (~41 days).
+  `/var/luna/preferences/devmode_enabled` holds a 64-char token;
+  `CheckDevModeSession.dev` reported 999:36:05 left, and after
+  `ResetDevModeSession.dev` it reported 999:59:59. `renew-devmode.sh` (ssh + curl,
+  no Node) runs hourly from cron on farnsworth and renews at most once a day; the
+  TV's SSH is closed when it's off, so the hourly runs exit quietly until it's on.
+  The TV's dropbear only offers `ssh-rsa` host keys. Homebrew Channel not checked.
 
 ## S2. chill.institute: is ranking good enough?
 

@@ -32,7 +32,7 @@ skipped for now (Cinemeta stands in). Open items wait on:
 | D18 | **Own segmented downloader** instead of aria2c for put.io → home | Fewer moving parts; resume + retry tested | If home mirroring is slower than the link, add aria2c back behind the same interface | 🏠 |
 | D19 | **No auth on the LAN API**; profiles have no PINs | LAN-only household; nothing exposed to the internet | If guests on the Wi-Fi matter, add a pairing code for devices | 🏠 |
 | D20 | Docker image is **1.08 GB** (Debian ffmpeg) | Size doesn't matter on a home server | Switch to a static ffmpeg build if pulls are slow | 🏠 |
-| D21 | Developer Mode renewal via `webos/renew-devmode.sh` (community-documented session-token endpoint) | Works on webOS 23–25 | Phase 0 S1 step 6. If it doesn't, use Homebrew Channel or the Stremio/Cast fallbacks (BACKLOG) | 📺 |
+| D21 | Developer Mode renewal via `webos/renew-devmode.sh` (community-documented session-token endpoint) | ✅ Verified 2026-11-15 on webOS 11.2: 999:36:05 → 999:59:59. Hourly cron on farnsworth, renews ≤ once a day | Phase 0 S1 step 6. If it doesn't, use Homebrew Channel or the Stremio/Cast fallbacks (BACKLOG) | 📺 |
 | D22 | Movies only; TV shows are Phase 6 | From the brief | When you want series | — |
 | D23 | Home-screen rows: Continue, My List, Ready, Trending, Because-you-watched, Popular, Top Rated, New, 6 genres | A Netflix-like default | After real use; reorder in `server/src/services/catalog.ts` | 🏠 |
 | D30 | The player trusts `canPlayType` for audio codecs; if the TV under-reports (e.g. says "no" to E-AC3 it can decode), it would needlessly use the compat stream and lose 5.1 | The G3's answers are honest | Phase 0 codec matrix: compare `canPlayType` with what actually plays | 📺 |

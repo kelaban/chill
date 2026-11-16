@@ -15,6 +15,9 @@ never needs reinstalling.
    npx -p @webos-tools/cli@3 ares-setup-device   # add: name "tv", the TV's IP, port 9922, user prisoner
    npx -p @webos-tools/cli@3 ares-novacom --device tv --getkey   # enter the passphrase shown on the TV
    ```
+   The passphrase is case-sensitive; type it in upper case exactly as shown. If
+   `ares-*` later says *Malformed OpenSSH private key. Bad passphrase?*, fix it
+   with `ares-setup-device -m tv -i "{'passphrase':'<AS SHOWN>'}"`.
 
 ## Build and install
 
@@ -32,10 +35,24 @@ opens Chrome DevTools for the app running on the TV.
 
 ## Keeping Developer Mode alive
 
-Developer Mode sessions expire (community reports say ~1000 h) and take
-sideloaded apps with them. `webos/renew-devmode.sh tv` renews the session; run
-it daily from cron on the home server. **Unverified on the G3 yet** (DECISIONS
-D21). If renewal ever fails, chill still works:
+Developer Mode sessions last 1000 h (~41 days) and take sideloaded apps with
+them when they expire. `webos/renew-devmode.sh <tv-ip>` resets the clock to
+999:59:59 using only `ssh` and `curl` (verified on the G3, DECISIONS D21). On
+farnsworth:
+
+```sh
+# once, from the laptop: give farnsworth a passphrase-less copy of the TV key
+cp ~/.ssh/tv_webos /tmp/k && ssh-keygen -p -N "" -f /tmp/k   # asks for the TV passphrase
+scp /tmp/k keith@farnsworth:.ssh/tv_webos && rm /tmp/k
+scp webos/renew-devmode.sh keith@farnsworth:apps/chill/
+
+# farnsworth crontab (hourly; renews at most once a day, silent while the TV is off)
+17 * * * * $HOME/apps/chill/renew-devmode.sh 192.168.1.193 >> $HOME/apps/chill/devmode.log 2>&1
+```
+
+`~/apps/chill/devmode.log` gets one line per renewal. If it's had none for a
+couple of weeks while the TV has been in use, check it. If renewal ever fails,
+chill still works:
 
 - **Google Cast**: the G3 has it built in; open chill on a phone and cast.
 - **The TV's browser**: open `http://<server>:7878/tv`.
