@@ -8,9 +8,11 @@ only the decision record below survives.
 
 ## S1. The TV: what can it actually play?
 
-1. Known: LG OLED G5 (2025), webOS 25 → Chromium 120. Confirm the exact model
-   number and current webOS version (Settings → General → About); note if the
-   webOS 26 update (Chromium 132) has landed.
+1. Known: LG OLED G3 (2023), shipped with webOS 23 (Chromium 94); eligible for
+   LG's webOS Re:New upgrades to 24/25. Record the exact model number, current
+   webOS and firmware version (Settings → General → About), and — what actually
+   matters — the Chromium version in the harness's `navigator.userAgent`. If it's
+   ≥ 108, raise the build target in `ARCHITECTURE.md` and `CLAUDE.md`.
 2. Enable **Developer Mode** (LG Developer Mode app; needs an LG developer
    account). Install `@webos-tools/cli` (`ares-*`) or webOS Dev Manager on a laptop.
 3. Build a hello-world **hosted app** IPK (`webos/` layout from the Phase 1 plan)
@@ -28,7 +30,7 @@ only the decision record below survives.
    | 4 | MP4 (fMP4) | HEVC 10-bit HDR10 | E-AC3 | what a remux would produce |
    | 5 | MKV | HEVC DV profile 8 | E-AC3 Atmos | |
    | 6 | MKV | HEVC DV profile 5 | E-AC3 | some WEB-DLs |
-   | 7 | MKV | HEVC | DTS / DTS-HD MA | expected to fail: LG dropped DTS in 2025 |
+   | 7 | MKV | HEVC | DTS / DTS-HD MA | expected to work on 2023 models (LG only dropped DTS in 2025) — confirm |
    | 8 | MKV | HEVC | TrueHD | |
    | 9 | HLS (fMP4 segments) | HEVC | E-AC3 | our remux path |
    | 10 | put.io HLS of a real file | (put.io's transcode) | | universal fallback |
@@ -93,7 +95,7 @@ for the Cast sender on the LAN, and if so plan local TLS for Phase 5.
 
 | Decision | Options | Chosen | Evidence |
 |---|---|---|---|
-| Chromium build target | chrome120 (webOS 25) | chrome120 | LG web-engine table |
+| Chromium build target | chrome94 floor / higher if upgraded | | S1 step 1 user agent |
 | Seamless handoff | two-element / single-element at black segment / natural break only | | S1 step 4 |
 | Local playback engine | own (direct + remux) / Jellyfin | | S1 rows 3, 4, 9 |
 | Default target profile | 2160p HDR WEB-DL ≤ 25 GB / 1080p x265 ≤ 12 GB | | S1, S4 disk |

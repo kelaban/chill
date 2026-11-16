@@ -6,7 +6,7 @@ Two places tests can run:
 
 - **Cloud** (this dev container and CI). Has the internet and the TMDB /
   chill.institute / put.io APIs. Has no TV and no home server.
-- **Home** (the LAN). Has the LG G5 and the server. This is the only place real
+- **Home** (the LAN). Has the LG G3 and the server. This is the only place real
   playback, the remote, HDR, and the seamless switch can be judged.
 
 Everything that *can* be pushed to the cloud is, so the home loop is short and rare.
@@ -21,7 +21,7 @@ Everything that *can* be pushed to the cloud is, so the home loop is short and r
 | 4 | **Soak simulation** | cloud | before each phase ships | 20 titles through play → upgrade → watch → idle over a simulated month; asserts neither 100 GB budget is ever exceeded and no watch state is lost |
 | 5 | **UI e2e** | cloud / CI | every commit | Playwright, Chromium, 1920×1080, against the fake backend. One pass **keyboard-only** (arrows, Enter, Back = keyCode 461, media keys) and one **pointer-only**. Screenshots of each screen saved as CI artifacts |
 | 6 | **Playback e2e** | cloud / CI | every commit | ffmpeg-generated H.264/AAC clips (headless Chromium has no HEVC) with a burned-in frame counter: resume position, OSD, and the **seamless handoff** — the frame counter read via `requestVideoFrameCallback` must not skip or repeat more than one frame |
-| 7 | **Build guards** | cloud / CI | every commit | output must parse as `chrome120`; bundle size budget; no API token or put.io URL in the client bundle; log-redaction test over a captured e2e log |
+| 7 | **Build guards** | cloud / CI | every commit | output must parse as the TV's target (`chrome94` until Phase 0); bundle size budget; no API token or put.io URL in the client bundle; log-redaction test over a captured e2e log |
 | 8 | **Live API smoke** | cloud | on demand / nightly | Real TMDB search, real chill.institute search, real put.io transfer of an **open-licensed film** (Big Buck Bunny, Sintel, Tears of Steel) into `chill-test/`, stream URL resolves, then delete everything. Never more than 10 GB on put.io at once |
 | 9 | **On the TV** | home | phase milestones | Codec matrix and switch measurements (Phase 0); real cold-Play timing; HDR/DV look; whether a viewer can spot the seamless switch; remote ergonomics |
 

@@ -54,9 +54,11 @@ Not affiliated with chill.institute; it's an API we call.
   URLs are fetched per request and never logged or stored.
 - **Be a good API citizen.** chill.institute: cache searches 12 h, concurrency ≤ 2,
   no bulk availability scans. TMDB: cache, and show attribution.
-- **Target the TV, not your laptop.** LG OLED G5, webOS 25, Chromium 120: Vite
-  `build.target: "chrome120"`; keep animations to transforms/opacity (TV CPUs are
-  weak); test focus with D-pad *and* pointer. **No DTS** — the TV can't decode it.
+- **Target the TV, not your laptop.** LG OLED G3 (2023). It shipped with webOS 23
+  (Chromium 94) and may since have been upgraded; until Phase 0 reads its real user
+  agent, build for the floor: Vite `build.target: "chrome94"`, Tailwind v3 (v4
+  needs Chromium 111). Keep animations to transforms/opacity (TV CPUs are weak);
+  test focus with D-pad *and* pointer.
 - **Upgrades never ask.** A better copy swaps in seamlessly (aligned, on a scene
   cut). Don't add prompts or toasts for it; see `ARCHITECTURE.md` → *Seamless upgrade*.
 - **LAN-only.** Nothing is exposed to the internet; there is no remote access.

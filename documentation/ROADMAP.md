@@ -20,7 +20,7 @@ real on the TV.
 
 ## Phase 0 — Spikes & decisions (1–2 days)
 
-Answer the PRD's open questions with experiments, not guesses: the G5's codec
+Answer the PRD's open questions with experiments, not guesses: the G3's codec
 matrix and seamless-switch limits (two decoders? picture-mode blanking?), put.io
 time-to-ready, chill.institute ranking quality, home server specs.
 **Exit:** a decision record in the Phase 0 plan, including the Jellyfin decision
@@ -63,7 +63,7 @@ track pickers, language preferences fed into the ranker.
 
 ## Phase 5 — Phone & Google Cast
 
-Phone layout as a PWA; Cast sender to the G5's built-in Google Cast (Default
+Phone layout as a PWA; Cast sender to the G3's built-in Google Cast (Default
 Media Receiver first, custom receiver if progress reporting needs it); "play on
 TV" handoff. LAN-only — if Phase 0 shows the Cast sender needs a secure context,
 serve chill over HTTPS on the LAN (Caddy with a DNS-01 certificate for a private

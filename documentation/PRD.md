@@ -63,7 +63,7 @@ has their own Continue Watching and My List. No public sign-up, ever.
 
 - **Two quality tiers per title:**
   - **Instant** — the release most likely to finish on put.io fastest
-    (high seeders, ~2–8 GB, codecs the TV plays — never DTS — and, where a healthy
+    (high seeders, ~2–8 GB, codecs the TV plays, and, where a healthy
     one exists, the same dynamic range as the target so the later switch is invisible). Streamed straight from
     put.io; never needs local disk.
   - **Target** — the household's preferred quality (default: 2160p HDR WEB-DL
@@ -116,9 +116,11 @@ a 20 GB file takes ~5 min at 500 Mbps, ~27 min at 100 Mbps.
 - **LAN-only.** No watching outside the home; nothing is exposed to the internet.
 - Secrets (TMDB, OMDb, chill, put.io tokens) live only on the server. Signed
   put.io URLs are never logged.
-- **The TV is an LG OLED G5 (2025)**: webOS 25, Chromium 120 web engine (webOS 26,
-  Chromium 132, is rolling out to it). HEVC, AV1, Dolby Vision, HDR10, Dolby Atmos;
-  **Google Cast built in**; **no DTS** — LG dropped DTS from the whole 2025 line-up.
+- **The TV is an LG OLED G3 (2023).** It shipped with webOS 23 (Chromium 94 web
+  engine) and is eligible for LG's yearly webOS Re:New upgrades (24, 25), so the
+  real engine may be newer — Phase 0 reads it. HEVC, AV1, Dolby Vision, HDR10,
+  Dolby Atmos; DTS expected to work (LG only dropped it in 2025); **Google Cast**
+  arrived via firmware 23.20.50 / webOS 24.
 
 ## Success metrics
 
@@ -131,8 +133,8 @@ a 20 GB file takes ~5 min at 500 Mbps, ~27 min at 100 Mbps.
 
 | Question | Answer (2026-11-16) | Consequence |
 |---|---|---|
-| TV | LG OLED G5 (2025), webOS 25 | Build for Chromium 120; Tailwind v4 is fine; no legacy polyfills. |
-| Chromecast? | Built into the TV | Phone → TV casting needs no extra device; it's also the fallback if Developer Mode sideloading breaks. |
+| TV | LG OLED G3 (2023), confirmed | Build for Chromium 94 (webOS 23) until Phase 0 confirms a newer engine; Tailwind v3. |
+| Chromecast? | Built into the TV (Google Cast, firmware ≥ 23.20.50) | Phone → TV casting needs no extra device; it's also the fallback if Developer Mode sideloading breaks. |
 | Home downlink | "Good enough" | Mirroring speed isn't a design constraint. |
 | Watch outside the home? | No | LAN-only; no Tailscale, no remote access phase. |
 | Upgrade UX | Seamless, no prompt | Phase 2 builds a frame-aligned in-place handoff. |
