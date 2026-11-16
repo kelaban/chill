@@ -19,3 +19,8 @@
 - **Remux tier.** Opt-in per title for lossless copies when local space allows.
 - **Server hardware transcode** (QuickSync/VAAPI) if Phase 4 shows it's needed.
 - **Watch parties / sharing** — probably never.
+- **chill as a Stremio add-on.** Expose the server through Stremio's add-on
+  protocol so Stremio's LG-store app is a second way onto the TV (no Developer
+  Mode). Loses the seamless upgrade; keeps browse, Play and resume. Reference:
+  chill-institute/chill-stremio (MIT).
+- **Trickplay thumbnails, subtitles picker, audio track picker** (Phase 4).

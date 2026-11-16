@@ -1,5 +1,10 @@
 # Phase 1 — Walking skeleton
 
+> **Status 2026-11-16:** built and passing in demo mode (unit, integration, e2e). Not archived yet: the
+> acceptance items that need the TV, the home server or real API keys are still open — see
+> `documentation/DECISIONS.md`. Deviations: aria2c replaced by a built-in resumable downloader (D18);
+> put.io streams use put.io's own URL and fall back to HLS via chill.institute (D7, D8).
+
 **Goal:** on the TV, browse the whole movie universe, press Play on something never
 downloaded, and be watching from put.io in ≤ 60 s. Stop; relaunch; resume.
 

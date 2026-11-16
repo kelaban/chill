@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+server/public
+server/dist
+webos/dist
+data
+test-results
+.git
+documentation

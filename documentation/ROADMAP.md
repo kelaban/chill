@@ -8,9 +8,9 @@ real on the TV.
 
 | Phase | Theme | Plan | Status |
 |---|---|---|---|
-| 0 | Spikes & decisions | `plans/phase-0-spikes.md` | Ready |
-| 1 | Walking skeleton: browse → Play from put.io on the TV | `plans/phase-1-walking-skeleton.md` | Ready |
-| 2 | Quality ladder, local tier & storage manager | `plans/phase-2-quality-ladder-and-storage.md` | Ready |
+| 0 | Spikes & decisions | `plans/phase-0-spikes.md` | Waiting on keys + TV |
+| 1 | Walking skeleton: browse → Play from put.io on the TV | `plans/phase-1-walking-skeleton.md` | Built; TV acceptance pending |
+| 2 | Quality ladder, local tier & storage manager | `plans/phase-2-quality-ladder-and-storage.md` | Built; TV acceptance pending |
 | 3 | Netflix polish & personalization | to write | — |
 | 4 | Playback robustness (remux, audio, subtitles) | to write | — |
 | 5 | Phone & Google Cast | to write | — |

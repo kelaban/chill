@@ -12,3 +12,5 @@ data/
 test-results/
 web/dist/
 server/dist/
+webos/dist/
+docker/.env

@@ -11,6 +11,17 @@ Two places tests can run:
 
 Everything that *can* be pushed to the cloud is, so the home loop is short and rare.
 
+## Status (2026-11-16)
+
+| Layer | Where | State |
+|---|---|---|
+| 1–3 | `server/test/*.test.ts` | ✅ 84 tests: ranker, storage, playback, alignment, adapters, downloader, integration (Play → upgrade → home → cleanup → resume, race) |
+| 4 Soak | — | ⏳ not written yet |
+| 5–6 UI + playback e2e | `scripts/e2e.mjs` | ✅ remote-only navigation, first frame, seamless switch on a cut (≤ 1 frame), resume |
+| 7 Build guards | `npm run typecheck`, `npm run check:bundle`, CI | ✅ |
+| 8 Live API | `server/test/services.live.test.ts` | ⏸ written; skips until tokens are configured |
+| 9 On the TV | — | ⏸ tabled until home testing |
+
 ## Layers
 
 | # | Layer | Runs | When | What it covers |

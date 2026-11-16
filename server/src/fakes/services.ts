@@ -91,7 +91,7 @@ export function fakeChill(opts: { mediaUrl: (fileId: number) => string; latencyM
   return {
     async search(query): Promise<Release[]> {
       await wait();
-      const q = normalizeTitle(query.replace(/\b(19|20)\d{2}\b/, ""));
+      const q = normalizeTitle(query.replace(/\s+(19|20)\d{2}$/, ""));
       const movie = fakeMovies().find((m) => normalizeTitle(m.title) === q);
       if (!movie || movie.id === FAKE_NO_RELEASES_ID) return [];
       const year = Number(movie.release_date?.slice(0, 4));

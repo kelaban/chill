@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>chill</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #141414; color: #fff; font-family: "LG Smart UI", Roboto, Arial, sans-serif; }
+      .c { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; }
+      .logo { font-size: 120px; font-weight: 900; color: #e50914; letter-spacing: -4px; }
+      .msg { font-size: 30px; color: rgba(255,255,255,.7); text-align: center; max-width: 1200px; line-height: 1.4; }
+      button { font-size: 30px; padding: 16px 48px; border-radius: 8px; border: 0; background: #fff; color: #000; font-weight: 700; }
+      button:focus { outline: 6px solid #e50914; }
+    </style>
+  </head>
+  <body>
+    <div class="c">
+      <div class="logo">chill</div>
+      <div class="msg" id="msg">Connecting to your server…</div>
+      <button id="retry" style="display:none" onclick="go()">Retry</button>
+    </div>
+    <script>
+      // Hosted-app shell: the real UI ships with every server deploy.
+      // __CHILL_URL__ is replaced by `npm run webos:package` (CHILL_URL env).
+      var SERVER = "__CHILL_URL__";
+      function fail() {
+        document.getElementById("msg").innerHTML = "Can't reach chill at <b>" + SERVER + "</b>.<br>Is the home server on? Is the TV on the same network?";
+        var b = document.getElementById("retry");
+        b.style.display = "block";
+        b.focus();
+      }
+      function go() {
+        document.getElementById("msg").textContent = "Connecting to your server…";
+        var x = new XMLHttpRequest();
+        x.timeout = 5000;
+        x.onload = function () { x.status === 200 ? location.replace(SERVER + "/tv") : fail(); };
+        x.onerror = x.ontimeout = fail;
+        x.open("GET", SERVER + "/api/health");
+        x.send();
+      }
+      document.addEventListener("keydown", function (e) {
+        if (e.keyCode === 13 && document.getElementById("retry").style.display === "block") go();
+      });
+      go();
+    </script>
+  </body>
+</html>

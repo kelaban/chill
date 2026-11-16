@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* A 1920×1080 design canvas: on TV-sized screens 1rem scales with the viewport,
+   so every Tailwind size (all rem) scales with it. Phones keep 16px. */
+:root {
+  color-scheme: dark;
+}
+html {
+  font-size: 16px;
+  background: #141414;
+}
+@media (min-width: 1024px) {
+  html {
+    font-size: calc(100vw / 120);
+  }
+}
+body {
+  @apply bg-ink text-white font-sans antialiased;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+html.tv,
+html.tv body {
+  cursor: default;
+  overflow: hidden;
+}
+html.tv #root {
+  height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+html.tv #root::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Focus: transform + opacity only (cheap on TV GPUs). */
+.focus-pop {
+  transition: transform 140ms ease-out, box-shadow 140ms ease-out;
+  will-change: transform;
+}
+.focus-pop.is-focused {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 0.25rem #fff, 0 0.75rem 2rem rgba(0, 0, 0, 0.6);
+  z-index: 10;
+}
+.btn.is-focused {
+  transform: scale(1.06);
+}
+
+.fade-in {
+  animation: fade 220ms ease-out;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.hero-scrim {
+  background: linear-gradient(90deg, rgba(20, 20, 20, 0.95) 0%, rgba(20, 20, 20, 0.6) 38%, rgba(20, 20, 20, 0) 70%),
+    linear-gradient(0deg, #141414 0%, rgba(20, 20, 20, 0) 35%);
+}

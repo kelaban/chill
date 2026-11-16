@@ -62,7 +62,7 @@ export function fakeMovies(): TmdbMovie[] {
     title: r[1],
     original_title: r[1],
     release_date: year(r),
-    overview: `${r[8]} A ${GENRES.find((g) => g.id === r[3][0])?.name.toLowerCase()} film from ${r[2]}, directed by ${r[7]}.`,
+    overview: `${r[8]} ${/^[aeiou]/i.test(GENRES.find((g) => g.id === r[3][0])?.name ?? "") ? "An" : "A"} ${GENRES.find((g) => g.id === r[3][0])?.name.toLowerCase()} film from ${r[2]}, directed by ${r[7]}.`,
     poster_path: `/fake/${r[0]}.svg`,
     backdrop_path: `/fake/${r[0]}-bd.svg`,
     vote_average: r[4],

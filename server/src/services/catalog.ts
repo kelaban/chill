@@ -151,6 +151,7 @@ export async function detail(ctx: Ctx, tmdbId: number, profileId: number): Promi
   const { detail: d } = await ensureTitle(ctx, tmdbId);
   const ws = watchState(ctx, profileId, tmdbId);
   const cert = d.release_dates?.results.find((r) => r.iso_3166_1 === "US")?.release_dates.find((x) => x.certification)?.certification ?? null;
+  if (availability(ctx, tmdbId).state === "unknown") ctx.jobs.enqueue("releases.search", { tmdbId }, { dedupeKey: `releases.search:${tmdbId}` });
   const inList = !!ctx.db.prepare("SELECT 1 FROM my_list WHERE profile_id = ? AND tmdb_id = ?").get(profileId, tmdbId);
   return {
     ...toSummary(d),

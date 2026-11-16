@@ -20,23 +20,40 @@ Not affiliated with chill.institute; it's an API we call.
   prepend: `> Completed YYYY-MM-DD — what shipped; any deviations from the plan.`
 - **Living documents** — update in place, never archive: `documentation/PRD.md`,
   `documentation/ARCHITECTURE.md`, `documentation/ROADMAP.md`,
-  `documentation/BACKLOG.md`, `documentation/TESTING.md`. `ISSUES.md` is a lightweight bug tracker, one `##`
+  `documentation/BACKLOG.md`, `documentation/TESTING.md`, `documentation/DECISIONS.md` (calls made on
+  assumptions — add one whenever you guess instead of measure). `ISSUES.md` is a lightweight bug tracker, one `##`
   heading per bug.
 - Before starting work, pick the relevant plan. If none exists, write one first.
 - Phases are in `ROADMAP.md`. Start with `plans/phase-0-spikes.md`.
 
-## Where things live (once scaffolded in Phase 1)
+## Where things live
 
 | Path | Contents |
 |---|---|
 | `server/src/adapters/` | `tmdb`, `omdb`, `chill`, `putio` — thin typed clients, nothing else |
 | `server/src/domain/` | Pure logic: `ranker`, `storage`, `selectVariant`, position mapping |
+| `server/src/services/` | Catalog, releases, acquirer (Play + race), mirror, upgrade (seamless prep), storage |
+| `server/src/fakes/` | Fake TMDB / chill.institute / put.io + generated sample films (demo mode, tests) |
 | `server/src/jobs.ts` | Durable SQLite job queue + worker |
 | `server/migrations/` | SQLite migrations (`0001_init.sql`, …) |
 | `web/` | React SPA (TV 10-foot UI + phone layout) |
+| `web/src/player/handoff.ts` | Two-`<video>` engine that performs the seamless switch |
 | `webos/` | Hosted-app shell for the TV |
 | `shared/` | API DTOs shared by server and web |
 | `docker/` | Dockerfile, compose, `.env.example` |
+
+## Commands
+
+| Task | Command |
+|---|---|
+| Dev (demo mode without tokens) | `npm run dev` |
+| Typecheck / tests / e2e | `npm run typecheck` · `npm test` · `npm run test:e2e` |
+| Live API smoke tests | `npm run test:live` (skips without tokens) |
+| Build + bundle check | `npm run build && npm run check:bundle` |
+| TV package | `CHILL_URL=http://<server>:7878 npm run webos:package` |
+
+Demo mode (`CHILL_FAKE=1`) runs everything against fakes, including real ffmpeg
+alignment and the seamless switch, so most work never needs real credentials.
 
 ## Conventions
 

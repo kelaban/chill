@@ -1,0 +1,17 @@
+{
+  "id": "com.kelaban.chill",
+  "version": "1.0.0",
+  "vendor": "chill",
+  "type": "web",
+  "main": "index.html",
+  "title": "chill",
+  "icon": "assets/icon-80.png",
+  "largeIcon": "assets/icon-130.png",
+  "splashBackground": "assets/splash.png",
+  "bgColor": "#141414",
+  "iconColor": "#141414",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "transparent": false,
+  "requiredACG": []
+}

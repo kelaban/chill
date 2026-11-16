@@ -1,0 +1,25 @@
+# On the home server:
+#   cp docker/.env.example docker/.env   # fill in the three tokens
+#   docker compose -f docker/compose.yml up -d
+# Demo (no tokens): CHILL_FAKE=1 docker compose -f docker/compose.yml up -d
+services:
+  chill:
+    image: ghcr.io/kelaban/chill:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "7878:7878"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CHILL_FAKE: ${CHILL_FAKE:-0}
+    volumes:
+      - chill-data:/data
+      # To let Plex/Jellyfin see the same files, bind the library instead:
+      # - /srv/media/chill:/data/library
+
+volumes:
+  chill-data:
