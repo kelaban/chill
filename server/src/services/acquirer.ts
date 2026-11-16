@@ -190,6 +190,7 @@ async function preferredFor(ctx: Ctx, tmdbId: number) {
 
 /** Plan the target acquisition for a title given the copy we have/will have. */
 async function planTarget(ctx: Ctx, tmdbId: number, instantPick: Scored | null) {
+  if (tmdbId < 0) return; // episodes: one copy each, no 4K upgrade (DECISIONS D42)
   const exists = ctx.db.prepare(`SELECT 1 FROM acquisitions WHERE tmdb_id = ? AND tier = 'target' AND state IN ${ACTIVE}`).get(tmdbId);
   if (exists) return;
   // Prefer the same edition (so resume positions line up), but never "the same

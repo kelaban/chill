@@ -1,5 +1,5 @@
 import type {
-  Availability, HomeResponse, PlayStatus, Profile, StorageReport, TitleDetail, TitleSummary, UpgradeReady,
+  Availability, EpisodeItem, HomeResponse, PlayStatus, Profile, Row, ShowDetail, StorageReport, TitleDetail, TitleSummary, UpgradeReady,
 } from "@chill/shared";
 
 export function profileId(): number {
@@ -48,6 +48,12 @@ export const api = {
   setSubtitle: (id: number, choice: { language: string | null; forced?: boolean; sdh?: boolean }) => req("POST", `/api/titles/${id}/subtitle`, choice),
   removeFromList: (id: number) => req("DELETE", `/api/my-list/${id}`),
   storage: () => req<StorageReport>("GET", "/api/storage"),
+  shows: () => req<{ rows: Row[] }>("GET", "/api/shows"),
+  show: (imdb: string) => req<ShowDetail>("GET", `/api/shows/${imdb}`),
+  season: (imdb: string, n: number) => req<EpisodeItem[]>("GET", `/api/shows/${imdb}/seasons/${n}`),
+  searchShows: (q: string) => req<TitleSummary[]>("GET", `/api/shows/search?q=${encodeURIComponent(q)}`),
+  next: (id: number) => req<{ tmdbId: number; season: number; episode: number; name: string } | null>("GET", `/api/titles/${id}/next`),
+  prefetch: (id: number) => req<PlayStatus>("POST", `/api/titles/${id}/prefetch`),
   pin: (variantId: string, pinned: boolean) => req("POST", `/api/variants/${variantId}/pin`, { pinned }),
   evict: (variantId: string) => req("POST", `/api/variants/${variantId}/evict`),
   health: () => req<{ ok: boolean; fake: boolean }>("GET", "/api/health"),
@@ -67,7 +73,16 @@ export function telemetry(body: Record<string, unknown>) {
   return fetch("/api/telemetry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive: true }).catch(() => {});
 }
 
-export const img = (size: "w185" | "w342" | "w500" | "w780" | "w1280" | "original", path: string | null | undefined) => (path ? `/img/${size}${path}` : "");
+// Absolute URLs (chill.institute's show art) load directly; paths go through the /img proxy.
+export const img = (size: "w185" | "w342" | "w500" | "w780" | "w1280" | "original", path: string | null | undefined) =>
+  path ? (/^https?:\/\//.test(path) ? path : `/img/${size}${path}`) : "";
+
+/** Where a card goes: a show opens its page, an episode plays, a film opens its detail. */
+export function titleHref(t: { tmdbId: number; kind?: string; showId?: string }): string {
+  if (t.kind === "show" && t.showId) return `/show/${t.showId}`;
+  if (t.kind === "episode") return `/watch/${t.tmdbId}`;
+  return `/title/${t.tmdbId}`;
+}
 
 export function fmtBytes(n: number) {
   return n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.round(n / 1e6)} MB`;

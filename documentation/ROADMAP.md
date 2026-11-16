@@ -14,7 +14,7 @@ real on the TV.
 | 3 | Netflix polish & personalization | to write | — |
 | 4 | Playback robustness (remux, audio, subtitles) | `plans/phase-4-subtitles.md` (4a) | Compat remux + subtitles built; TV check pending |
 | 5 | Phone & Google Cast | to write | — |
-| 6 | TV shows | to write | — |
+| 6 | TV shows | `plans/phase-6-tv-shows.md` | Built; real-data + TV check pending |
 
 ---
 

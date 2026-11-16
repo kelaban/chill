@@ -16,6 +16,50 @@ export interface TitleSummary {
   ready?: boolean;
   /** 0–1 progress for Continue Watching. */
   progress?: number;
+  /** Absent = movie. A show opens its page; an episode plays. */
+  kind?: "movie" | "show" | "episode";
+  /** The show's IMDb id, for shows and episodes. */
+  showId?: string;
+  /** Second line for episodes: "S1 E2 · Chapter 12". */
+  subtitle?: string;
+}
+
+export interface ShowSeason {
+  number: number;
+  name: string;
+  episodeCount: number;
+}
+
+export interface ShowDetail {
+  imdbId: string;
+  title: string;
+  year: number | null;
+  posterPath: string | null;
+  backdropPath: string | null;
+  overview: string;
+  rating: number | null;
+  networks: string[];
+  genres: string[];
+  status: string | null;
+  seasons: ShowSeason[];
+  /** What "Play" means for this profile: the episode to resume, or the next unwatched one. */
+  next: { tmdbId: number; season: number; episode: number; name: string; resume: boolean; positionS: number } | null;
+}
+
+export interface EpisodeItem {
+  /** The episode's title id (negative): play it with /watch/:id. */
+  tmdbId: number;
+  season: number;
+  episode: number;
+  name: string;
+  overview: string;
+  airDate: string | null;
+  runtimeMin: number | null;
+  stillPath: string | null;
+  /** 0–1 when partly watched. */
+  progress: number | null;
+  watched: boolean;
+  ready: boolean;
 }
 
 export interface Row {

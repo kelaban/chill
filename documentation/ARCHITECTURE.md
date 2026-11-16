@@ -187,6 +187,18 @@ alignment (`scale = a`, `shift = b`); on the compat stream it shifts by the
 offset. It draws the cues itself, above the controls. Defaults and memory per
 profile per title: `domain/subtitles.ts` → `pickSubtitle`.
 
+### TV shows
+
+chill.institute serves the TV catalog (rows by service, show detail with
+seasons, season episodes, and its own pick of release per episode); Cinemeta's
+keyless series catalog adds search. Each episode is a row in `episodes` and
+acts as a **title with a negative id**, so the movie pipeline runs unchanged.
+Release search for an episode = chill's pick (ranked first) + the general
+search for `Show S01E02` filtered by parsed season/episode. One copy per
+episode (no 4K upgrade); the next episode is prefetched at 50% and starts after
+a 5 s "Up next" card. Copies home use Plex's TV layout
+(`TV Shows/Show (Year)/Season 01/Show (Year) - S01E02 - Name.mkv`).
+
 ### Resume after eviction
 
 Same as cold Play, but the ranker prefers the release (or edition) recorded in

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api } from "../api";
+import { api, titleHref } from "../api";
 import { FocusGroup, Focusable } from "../components/Focusable";
 import { Card, Page, useInitialFocus } from "../components/ui";
 
@@ -21,6 +21,7 @@ export function Search() {
     setParams(debounced ? { q: debounced } : {}, { replace: true });
   }, [debounced, setParams]);
   const { data, isFetching } = useQuery({ queryKey: ["search", debounced], queryFn: () => api.search(debounced), enabled: debounced.trim().length > 0, staleTime: 60_000 });
+  const shows = useQuery({ queryKey: ["search-shows", debounced], queryFn: () => api.searchShows(debounced), enabled: debounced.trim().length > 1, staleTime: 60_000 });
   useInitialFocus("key-a", true);
 
   return (
@@ -50,11 +51,24 @@ export function Search() {
         </div>
         <div className="min-w-0 flex-1">
           {!debounced && <div className="pt-10 text-2xl text-white/50">Search every movie. chill finds a copy in the background.</div>}
-          {debounced && !isFetching && data?.length === 0 && <div className="pt-10 text-2xl text-white/60">Nothing matches "{debounced}".</div>}
+          {debounced && !isFetching && data?.length === 0 && !shows.data?.length && <div className="pt-10 text-2xl text-white/60">Nothing matches "{debounced}".</div>}
+          {!!shows.data?.length && (
+            <>
+              <h2 className="mb-3 text-2xl font-bold text-white/80">TV shows</h2>
+              <FocusGroup focusKey="show-results" className="mb-8 grid grid-cols-5 gap-5" testId="show-results">
+                {shows.data.map((t) => (
+                  <div key={t.showId} data-row="show-results">
+                    <Card fill t={t} onEnter={() => nav(titleHref(t))} />
+                  </div>
+                ))}
+              </FocusGroup>
+              {!!data?.length && <h2 className="mb-3 text-2xl font-bold text-white/80">Movies</h2>}
+            </>
+          )}
           <FocusGroup focusKey="results" className="grid grid-cols-5 gap-5 pb-10" testId="search-results">
             {data?.map((t) => (
               <div key={t.tmdbId} data-row="results">
-                <Card fill t={t} onEnter={() => nav(`/title/${t.tmdbId}`)} />
+                <Card fill t={t} onEnter={() => nav(titleHref(t))} />
               </div>
             ))}
           </FocusGroup>

@@ -58,7 +58,17 @@ export function Watch() {
   }, [nav, status?.phase]);
 
   if (status?.phase === "ready" && status.stream) {
-    return <Player tmdbId={id} title={title.data?.title ?? ""} stream={status.stream} startAtS={fromStart ? 0 : status.stream.startAtS} onExit={() => nav(-1)} />;
+    return (
+      <Player
+        tmdbId={id}
+        title={title.data?.title ?? ""}
+        subtitleLine={id < 0 ? (title.data?.tagline ?? null) : null}
+        stream={status.stream}
+        startAtS={fromStart ? 0 : status.stream.startAtS}
+        onExit={() => nav(-1)}
+        onNext={(next) => nav(`/watch/${next}`, { replace: true })}
+      />
+    );
   }
 
   const t = title.data;
@@ -99,7 +109,24 @@ export function Watch() {
   );
 }
 
-function Player({ tmdbId, title, stream, startAtS, onExit }: { tmdbId: number; title: string; stream: StreamInfo; startAtS: number; onExit: () => void }) {
+type NextEp = { tmdbId: number; season: number; episode: number; name: string };
+
+function Player({ tmdbId, title, subtitleLine, stream, startAtS, onExit, onNext }: { tmdbId: number; title: string; subtitleLine: string | null; stream: StreamInfo; startAtS: number; onExit: () => void; onNext: (tmdbId: number) => void }) {
+  // Episodes: what plays next, prefetched halfway through; an "Up next" card at the end.
+  const nextRef = useRef<NextEp | null>(null);
+  const prefetched = useRef(false);
+  const [upNext, setUpNext] = useState<{ ep: NextEp; left: number } | null>(null);
+  const upNextRef = useRef(upNext);
+  upNextRef.current = upNext;
+  useEffect(() => {
+    if (tmdbId < 0) void api.next(tmdbId).then((n) => (nextRef.current = n)).catch(() => {});
+  }, [tmdbId]);
+  useEffect(() => {
+    if (!upNext) return;
+    if (upNext.left <= 0) return onNext(upNext.ep.tmdbId);
+    const t = setTimeout(() => setUpNext((u) => (u ? { ...u, left: u.left - 1 } : u)), 1000);
+    return () => clearTimeout(t);
+  }, [upNext, onNext]);
   const box = useRef<HTMLDivElement>(null);
   const engine = useRef<HandoffEngine | null>(null);
   const [pos, setPos] = useState(startAtS);
@@ -139,12 +166,25 @@ function Player({ tmdbId, title, stream, startAtS, onExit }: { tmdbId: number; t
 
   useEffect(() => {
     const e = new HandoffEngine(box.current!, {
-      onTime: (p, d) => (setPos(p), d && setDur(d)),
+      onTime: (p, d) => {
+        setPos(p);
+        if (d) setDur(d);
+        const n = nextRef.current;
+        if (n && !prefetched.current && d && p / d > 0.5) {
+          prefetched.current = true;
+          void api.prefetch(n.tmdbId).catch(() => {});
+        }
+      },
       onPlaying: (p) => {
         setPlaying(p);
         if (!p) report("pause");
       },
-      onEnded: () => (report("end"), onExit()),
+      onEnded: () => {
+        report("end");
+        const n = nextRef.current;
+        if (n) setUpNext({ ep: n, left: 5 });
+        else onExit();
+      },
       onSubtitle: (t) => setCurSub(t),
       onCues: (c) => setCues(c),
       onSwitched: (r, to) => {
@@ -230,6 +270,15 @@ function Player({ tmdbId, title, stream, startAtS, onExit }: { tmdbId: number; t
       const e = engine.current;
       if (!e) return;
       poke();
+      const un = upNextRef.current;
+      if (un) {
+        // "Up next" card: OK plays it now, Back leaves.
+        if (k.key === "Enter" || k.key === " ") onNext(un.ep.tmdbId);
+        else if (isBack(k)) onExit();
+        else return;
+        k.preventDefault();
+        return;
+      }
       const m = menuRef.current;
       if (m !== null) {
         // Subtitle menu: Up/Down to move, OK to choose, Back to close.
@@ -277,6 +326,7 @@ function Player({ tmdbId, title, stream, startAtS, onExit }: { tmdbId: number; t
       <div data-testid="osd" className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-300 ${osd || !playing ? "opacity-100" : "opacity-0"}`}>
         <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 to-transparent px-16 pb-16 pt-10">
           <div className="text-4xl font-bold">{title}</div>
+          {subtitleLine && <div className="mt-1 text-2xl text-white/80">{subtitleLine}</div>}
           <div className="mt-2 text-xl text-white/60" data-testid="quality-label">
             {label}
           </div>
@@ -319,6 +369,26 @@ function Player({ tmdbId, title, stream, startAtS, onExit }: { tmdbId: number; t
               dangerouslySetInnerHTML={{ __html: cueHtml(c) }}
             />
           ))}
+        </div>
+      )}
+      {upNext && (
+        <div className="absolute bottom-24 right-16 z-30 w-[32rem] rounded-xl bg-black/85 p-6" data-testid="up-next" onClick={(ev) => ev.stopPropagation()}>
+          <div className="text-lg uppercase tracking-wider text-white/50">Up next</div>
+          <div className="mt-1 text-3xl font-bold">
+            S{upNext.ep.season} E{upNext.ep.episode}
+            {upNext.ep.name ? ` · ${upNext.ep.name}` : ""}
+          </div>
+          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/20">
+            <div className="h-full bg-white transition-[width] duration-1000 ease-linear" style={{ width: `${((5 - upNext.left) / 5) * 100}%` }} />
+          </div>
+          <div className="mt-4 flex gap-4 text-xl">
+            <button className="rounded-md bg-white px-6 py-2 font-semibold text-black" onClick={() => onNext(upNext.ep.tmdbId)}>
+              Play now · {upNext.left}
+            </button>
+            <button className="rounded-md bg-white/20 px-6 py-2" onClick={onExit}>
+              Back
+            </button>
+          </div>
         </div>
       )}
       {menu !== null && (

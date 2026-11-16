@@ -33,7 +33,7 @@ Not affiliated with chill.institute; it's an API we call.
 |---|---|
 | `server/src/adapters/` | `tmdb` or `cinemeta` (keyless, default without a TMDB token), `chill`, `putio` — thin typed clients |
 | `server/src/domain/` | Pure logic: `ranker`, `storage`, `selectVariant`, position mapping |
-| `server/src/services/` | Catalog, releases, acquirer (Play + race), mirror, upgrade (seamless prep), storage |
+| `server/src/services/` | Catalog, releases, acquirer (Play + race), mirror, upgrade (seamless prep), storage, subtitles, shows (TV) |
 | `server/src/fakes/` | Fake TMDB / chill.institute / put.io + generated sample films (demo mode, tests) |
 | `server/src/jobs.ts` | Durable SQLite job queue + worker |
 | `server/migrations/` | SQLite migrations (`0001_init.sql`, …) |
@@ -66,7 +66,8 @@ alignment and the seamless switch, so most work never needs real credentials.
 - **Domain logic is pure.** `ranker`, `storage`, and `selectVariant` take facts and
   return decisions — no I/O, no clock reads (pass `now`). They carry the tests.
 - **Watch state is keyed by TMDB id, never by file.** Files come and go; progress
-  doesn't.
+  doesn't. TV episodes are titles with **negative** ids (`-episodes.id`), so the
+  same pipeline serves them; `isEpisode(id)` is `id < 0`.
 - **Every byte goes through admission control.** No transfer or mirror starts
   without `storage.admit()` saying yes.
 - **Secrets stay on the server.** Tokens never reach the SPA bundle; signed put.io

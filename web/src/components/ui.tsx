@@ -32,7 +32,7 @@ export function Spinner({ className = "h-12 w-12" }: { className?: string }) {
 
 export function Card({ t, onEnter, focusKey, wide, fill }: { t: TitleSummary; onEnter: () => void; focusKey?: string; wide?: boolean; fill?: boolean }) {
   return (
-    <Focusable focusKey={focusKey} onEnter={onEnter} testId={`card-${t.tmdbId}`} label={t.title} className={`focus-pop relative shrink-0 overflow-hidden rounded-md bg-ink-3 ${fill ? "w-full" : wide ? "w-[22rem]" : "w-[12rem]"}`}>
+    <Focusable focusKey={focusKey} onEnter={onEnter} testId={`card-${t.showId && t.kind === "show" ? t.showId : t.tmdbId}`} label={t.title} className={`focus-pop relative shrink-0 overflow-hidden rounded-md bg-ink-3 ${fill ? "w-full" : wide ? "w-[22rem]" : "w-[12rem]"}`}>
       {(focused) => (
         <>
           <div className={wide ? "aspect-video" : "aspect-[2/3]"}>
@@ -51,7 +51,9 @@ export function Card({ t, onEnter, focusKey, wide, fill }: { t: TitleSummary; on
           {focused && (
             <div className="fade-in absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 to-transparent p-3 pt-10">
               <div className="truncate text-base font-bold">{t.title}</div>
+              {t.subtitle && <div className="truncate text-sm text-white/85">{t.subtitle}</div>}
               <div className="text-sm text-white/70">
+                {t.kind === "show" ? "Series · " : ""}
                 {t.year ?? ""}
                 {t.rating ? <span className="ml-2 text-ok">★ {t.rating.toFixed(1)}</span> : null}
               </div>
@@ -69,7 +71,7 @@ export function Row({ row, onOpen, wide }: { row: RowT; onOpen: (t: TitleSummary
       <h2 className="mb-3 px-16 text-2xl font-bold">{row.title}</h2>
       <FocusGroup focusKey={`row-${row.id}`} className="no-scrollbar flex gap-4 overflow-x-auto px-16 py-4">
         {row.items.map((t) => (
-          <Card key={t.tmdbId} t={t} wide={wide} onEnter={() => onOpen(t)} />
+          <Card key={t.showId ?? t.tmdbId} t={t} wide={wide} onEnter={() => onOpen(t)} />
         ))}
       </FocusGroup>
     </section>
@@ -79,7 +81,8 @@ export function Row({ row, onOpen, wide }: { row: RowT; onOpen: (t: TitleSummary
 const NAV = [
   { to: "/", label: "Home" },
   { to: "/search", label: "Search" },
-  { to: "/browse", label: "Browse" },
+  { to: "/browse", label: "Movies" },
+  { to: "/shows", label: "TV Shows" },
   { to: "/my-list", label: "My List" },
   { to: "/downloads", label: "Downloads" },
 ];

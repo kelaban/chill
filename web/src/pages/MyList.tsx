@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api";
+import { api, titleHref } from "../api";
 import { FocusGroup } from "../components/Focusable";
 import { Card, Page, useInitialFocus } from "../components/ui";
 
@@ -18,7 +18,7 @@ export function MyList() {
         <FocusGroup focusKey="my-list-grid" className="grid grid-cols-7 gap-5">
           {row?.items.map((t) => (
             <div key={t.tmdbId} data-row="list">
-              <Card fill t={t} onEnter={() => nav(`/title/${t.tmdbId}`)} />
+              <Card fill t={t} onEnter={() => nav(titleHref(t))} />
             </div>
           ))}
         </FocusGroup>

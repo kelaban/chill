@@ -342,3 +342,74 @@ describe("where a film streams", () => {
     expect(st.stream?.label).toMatch(/· Netflix · (put\.io|Home)$/);
   });
 });
+
+describe("TV shows", () => {
+  const ST = "tt4574334"; // Stranger Things (fake: Netflix, 2 seasons × 3 episodes)
+  type Ep = { tmdbId: number; season: number; episode: number; name: string; progress: number | null; watched: boolean };
+  type Show = { title: string; seasons: { number: number }[]; next: { tmdbId: number; season: number; episode: number; resume: boolean } | null };
+
+  it("lists shows by service, with search", async () => {
+    const home = await api<{ rows: { id: string; title: string; items: { showId?: string; kind?: string }[] }[] }>("GET", "/api/shows");
+    const nf = home.rows.find((r) => r.id === "tv-netflix")!;
+    expect(nf.title).toBe("Popular on Netflix");
+    expect(nf.items[0]).toMatchObject({ kind: "show", showId: ST });
+    expect(home.rows.map((r) => r.id)).toEqual(expect.arrayContaining(["tv-hbo_max", "tv-amc_plus"]));
+    const found = await api<{ showId: string }[]>("GET", "/api/shows/search?q=stranger");
+    expect(found.map((s) => s.showId)).toContain(ST);
+  });
+
+  it("opens a show with seasons, episodes, and 'play S1 E1'", async () => {
+    const show = await api<Show>("GET", `/api/shows/${ST}`);
+    expect(show.title).toBe("Stranger Things");
+    expect(show.seasons.map((s) => s.number)).toEqual([1, 2]);
+    expect(show.next).toMatchObject({ season: 1, episode: 1, resume: false });
+    const eps = await api<Ep[]>("GET", `/api/shows/${ST}/seasons/1`);
+    expect(eps.map((e) => e.episode)).toEqual([1, 2, 3]);
+    expect(eps.every((e) => e.tmdbId < 0)).toBe(true);
+    expect(eps[0]!.tmdbId).toBe(show.next!.tmdbId);
+  });
+
+  it("plays an episode end to end: chill's pick, one copy (no 4K upgrade), home under TV Shows/", async () => {
+    const [e1] = await api<Ep[]>("GET", `/api/shows/${ST}/seasons/1`);
+    await api("POST", `/api/titles/${e1!.tmdbId}/play`);
+    await advance(15_000);
+    const st = await api<PlayStatus>("GET", `/api/titles/${e1!.tmdbId}/play`);
+    expect(st.phase).toBe("ready");
+    expect(st.stream?.label).toContain("1080p WEB-DL");
+    expect(ctx.db.prepare("SELECT COUNT(*) FROM acquisitions WHERE tmdb_id = ? AND tier = 'target'").pluck().get(e1!.tmdbId)).toBe(0);
+    const local = ctx.db.prepare("SELECT local_path FROM variants WHERE tmdb_id = ? AND location = 'local'").pluck().get(e1!.tmdbId) as string;
+    expect(local).toBe("TV Shows/Stranger Things (2016)/Season 01/Stranger Things (2016) - S01E01 - Chapter 11.mp4");
+    const d = await api<{ title: string; tagline: string }>("GET", `/api/titles/${e1!.tmdbId}`);
+    expect(d).toMatchObject({ title: "Stranger Things · S1 E1", tagline: "Chapter 11" });
+  });
+
+  it("resumes from Continue Watching, then moves on to the next episode", async () => {
+    const [e1, e2] = await api<Ep[]>("GET", `/api/shows/${ST}/seasons/1`);
+    const v = ctx.db.prepare("SELECT id FROM variants WHERE tmdb_id = ? ORDER BY location = 'local' DESC").pluck().get(e1!.tmdbId) as string;
+    await api("POST", "/api/progress", { profileId: 1, tmdbId: e1!.tmdbId, variantId: v, positionS: 60, durationS: 180, event: "stop" });
+    const home = await api<{ rows: { id: string; items: { tmdbId: number; kind?: string; subtitle?: string }[] }[] }>("GET", "/api/home");
+    const cont = home.rows.find((r) => r.id === "continue")!.items.find((i) => i.kind === "episode");
+    expect(cont).toMatchObject({ tmdbId: e1!.tmdbId, subtitle: "S1 E1 · Chapter 11" });
+    expect((await api<Show>("GET", `/api/shows/${ST}`)).next).toMatchObject({ tmdbId: e1!.tmdbId, resume: true });
+
+    await api("POST", "/api/progress", { profileId: 1, tmdbId: e1!.tmdbId, variantId: v, positionS: 179, durationS: 180, event: "end" });
+    expect(await api("GET", `/api/titles/${e1!.tmdbId}/next`)).toMatchObject({ tmdbId: e2!.tmdbId, season: 1, episode: 2 });
+    expect((await api<Show>("GET", `/api/shows/${ST}`)).next).toMatchObject({ tmdbId: e2!.tmdbId, resume: false });
+  });
+
+  it("rolls from a season finale into the next season, and ends after the last episode", async () => {
+    const s1 = await api<Ep[]>("GET", `/api/shows/${ST}/seasons/1`);
+    const s2 = await api<Ep[]>("GET", `/api/shows/${ST}/seasons/2`);
+    expect(await api("GET", `/api/titles/${s1[2]!.tmdbId}/next`)).toMatchObject({ tmdbId: s2[0]!.tmdbId, season: 2, episode: 1 });
+    expect(await api("GET", `/api/titles/${s2[2]!.tmdbId}/next`)).toBeNull();
+    expect(await api("GET", `/api/titles/${HEAT}/next`)).toBeNull(); // films have no next
+  });
+
+  it("prefetching the next episode doesn't clear the one being watched", async () => {
+    const [e1, e2] = await api<Ep[]>("GET", `/api/shows/${ST}/seasons/1`);
+    await api("POST", `/api/titles/${e2!.tmdbId}/prefetch`);
+    await advance(15_000);
+    expect((await api<PlayStatus>("GET", `/api/titles/${e2!.tmdbId}/play`)).phase).toBe("ready");
+    expect(ctx.db.prepare("SELECT COUNT(*) FROM variants WHERE tmdb_id = ? AND location = 'local'").pluck().get(e1!.tmdbId)).toBe(1);
+  });
+});

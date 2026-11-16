@@ -119,3 +119,18 @@ describe("downloader", () => {
     void seenBytes;
   });
 });
+
+describe("chill.institute TV mapping (shapes per chill-contracts v4)", () => {
+  it("maps a TVShow and a TVShowDownload", async () => {
+    const { mapShow, mapTvDownload } = await import("../src/adapters/chill.js");
+    const show = mapShow({
+      imdbId: "tt4574334", title: "Stranger Things", year: 2016, source: "TV_SHOWS_SOURCE_NETFLIX", posterUrl: "https://image.tmdb.org/t/p/w500/x.jpg",
+      rating: 8.6, overview: "…", seasonCount: 5, status: "TV_SHOW_STATUS_ENDED", networks: ["Netflix"], firstAirDate: "2016-07-15",
+    })!;
+    expect(show).toMatchObject({ imdbId: "tt4574334", year: 2016, seasonCount: 5, status: "ended", networks: ["Netflix"], backdropUrl: null });
+    const dl = mapTvDownload({ title: "Stranger.Things.S01E02.1080p.WEB-DL", link: "magnet:?xt=1", size: "1200000000", seeders: "250", resolution: "1080p", codec: "x264", quality: "WEB-DL", indexer: "i", seasonNumber: 1, episodeNumber: 2, id: "rel-9" }, "Stranger Things")!;
+    expect(dl).toMatchObject({ id: "rel-9", sizeBytes: 1.2e9, seeders: 250, info: { title: "Stranger Things", season: 1, episode: 2, resolution: "1080p" } });
+    expect(mapTvDownload({ title: "no link" })).toBeNull();
+    expect(mapShow({ title: "no id" })).toBeNull();
+  });
+});

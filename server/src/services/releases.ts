@@ -5,6 +5,7 @@ import { releaseLabel, type Release } from "../domain/release.js";
 import { titleServices } from "../domain/services.js";
 import { getSetting } from "../db.js";
 import { ensureTitle } from "./catalog.js";
+import { episodeCode, episodeRow, isEpisode, showRow } from "./shows.js";
 
 const SEARCH_TTL_MS = 12 * 3_600_000;
 
@@ -33,8 +34,7 @@ export async function searchReleases(ctx: Ctx, tmdbId: number, opts: { force?: b
   const s = ctx.db.prepare("SELECT searched_at FROM searches WHERE tmdb_id = ?").get(tmdbId) as { searched_at: number } | undefined;
   if (s && !opts.force && ctx.clock.now() - s.searched_at < SEARCH_TTL_MS) return load(ctx, tmdbId);
   const { facts } = await ensureTitle(ctx, tmdbId);
-  const query = facts.year ? `${facts.title} ${facts.year}` : facts.title;
-  const results = await ctx.svc.chill.search(query);
+  const results = isEpisode(tmdbId) ? await episodeReleases(ctx, tmdbId) : await ctx.svc.chill.search(facts.year ? `${facts.title} ${facts.year}` : facts.title);
   const now = ctx.clock.now();
   ctx.db.transaction(() => {
     ctx.db.prepare("DELETE FROM releases WHERE tmdb_id = ?").run(tmdbId);
@@ -47,8 +47,32 @@ export async function searchReleases(ctx: Ctx, tmdbId: number, opts: { force?: b
   return results;
 }
 
+/**
+ * An episode's candidates: chill.institute's own pick, plus the general search
+ * for "Show S01E02" filtered by the parsed season/episode (never by name).
+ */
+async function episodeReleases(ctx: Ctx, tmdbId: number): Promise<Release[]> {
+  const e = episodeRow(ctx, tmdbId)!;
+  const show = showRow(ctx, e.show_imdb)!;
+  const [pick, found] = await Promise.all([
+    ctx.svc.chill.tvEpisodeDownload(e.show_imdb, e.season, e.episode).catch(() => null),
+    ctx.svc.chill.search(`${show.title} ${episodeCode(e.season, e.episode)}`).catch(() => [] as Release[]),
+  ]);
+  const matching = found.filter((r) => r.info?.season === e.season && r.info?.episode === e.episode);
+  const all = new Map<string, Release>();
+  for (const r of [...(pick ? [pick] : []), ...matching]) {
+    if (all.has(r.id)) continue;
+    // chill's pick carries no parsed title: it's this show's by construction.
+    all.set(r.id, r.info && !r.info.title ? { ...r, info: { ...r.info, title: show.title } } : r);
+  }
+  ctx.db.prepare("UPDATE episodes SET pick_release_id = ? WHERE id = ?").run(pick?.id ?? null, -tmdbId);
+  return [...all.values()];
+}
+
 export async function ranking(ctx: Ctx, tmdbId: number, prefer?: { releaseId?: string | null; edition?: string | null }): Promise<Ranking> {
   const [releases, { facts }] = await Promise.all([searchReleases(ctx, tmdbId), ensureTitle(ctx, tmdbId)]);
+  // Episodes: chill.institute's own pick leads unless resuming a different release.
+  if (isEpisode(tmdbId) && !prefer?.releaseId) prefer = { ...prefer, releaseId: episodeRow(ctx, tmdbId)?.pick_release_id ?? null };
   return rank(facts, releases, qualityProfile(ctx), deviceCaps(ctx), prefer);
 }
 

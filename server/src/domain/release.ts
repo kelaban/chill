@@ -8,6 +8,8 @@ import type { DynamicRange } from "@chill/shared";
 export interface ReleaseInfo {
   title: string;
   year?: number;
+  season?: number;
+  episode?: number;
   resolution?: string;
   quality?: string;
   source?: string;

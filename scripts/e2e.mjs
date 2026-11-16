@@ -176,6 +176,31 @@ try {
   await press("Escape");
   await page.waitForTimeout(800);
 
+  console.log("TV shows");
+  await page.goto(`${base}/`);
+  await page.waitForSelector("[data-testid=nav-tv-shows]");
+  await page.click("[data-testid=nav-tv-shows]");
+  await page.waitForSelector("[data-testid=row-tv-netflix]");
+  check(true, "TV Shows lists shows by service");
+  await page.click("[data-testid=card-tt4574334]");
+  await page.waitForSelector("[data-testid=show-title]");
+  await page.waitForFunction(() => document.querySelector("[data-focused=true]")?.getAttribute("data-testid") === "show-play");
+  check((await page.textContent("[data-testid=show-play]"))?.includes("Play S1 E1"), "show page offers Play S1 E1");
+  check((await page.locator("[data-testid=episodes] [role=button]").count()) === 3, "season 1 lists its 3 episodes");
+  await press("Enter");
+  await page.waitForFunction(() => { const v = document.querySelector("video[data-active]"); return v && v.currentTime > 0.5; }, null, { timeout: 60000 });
+  const ep1 = page.url();
+  check(/\/watch\/-\d+$/.test(ep1), "the episode plays");
+  // Jump to the end: the next episode was prefetched halfway, and rolls in after the Up next card.
+  await page.evaluate(() => window.__chillEngine.seekTo(window.__chillEngine.duration() - 1.5));
+  await page.waitForSelector("[data-testid=up-next]", { timeout: 15000 });
+  check((await page.textContent("[data-testid=up-next]"))?.includes("S1 E2"), "Up next: S1 E2");
+  await page.waitForFunction((u) => location.href !== u && /\/watch\/-\d+$/.test(location.pathname), ep1, { timeout: 15000 });
+  await page.waitForFunction(() => { const v = document.querySelector("video[data-active]"); return v && v.currentTime > 0.5; }, null, { timeout: 60000 });
+  check(true, "the next episode starts by itself");
+  await press("Escape");
+  await page.waitForTimeout(800);
+
   console.log("resume");
   const st = await (await fetch(`${base}/api/titles/949/play?profile=1`)).json();
   check(st.phase === "ready" && st.stream.startAtS > 10, `resume point kept (${st.stream?.startAtS?.toFixed(1)} s on ${st.stream?.label})`);

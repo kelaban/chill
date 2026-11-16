@@ -96,3 +96,18 @@ describe("Cinemeta catalog (live, keyless)", () => {
     expect(img.body.byteLength).toBeGreaterThan(5000);
   });
 });
+
+describe.skipIf(!LIVE_CHILL)("chill.institute TV (live, opt-in: LIVE_CHILL=1)", () => {
+  it("lists shows, a show's seasons, a season's episodes, and an episode download", async () => {
+    const chill = chillClient(tok("CHILL_TOKEN"));
+    const shows = await chill.tvShows("NETFLIX");
+    expect(shows.length).toBeGreaterThan(0);
+    const d = await chill.tvShowDetail(shows[0]!.imdbId);
+    expect(d.seasons.length).toBeGreaterThan(0);
+    const s = d.seasons.find((x) => x.seasonNumber > 0)!;
+    const eps = await chill.tvSeason(d.show.imdbId, s.seasonNumber);
+    expect(eps.length).toBeGreaterThan(0);
+    const dl = await chill.tvEpisodeDownload(d.show.imdbId, s.seasonNumber, eps[0]!.episodeNumber);
+    console.log(`chill TV: ${shows.length} Netflix shows; ${d.show.title} S${s.seasonNumber}: ${eps.length} episodes; pick: ${dl?.rawTitle ?? "none"}`);
+  });
+});

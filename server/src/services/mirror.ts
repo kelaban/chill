@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { newId, type Ctx } from "../context.js";
-import { libraryPath } from "../domain/naming.js";
+import { episodeLibraryPath, libraryPath } from "../domain/naming.js";
+import { episodeRow, isEpisode } from "./shows.js";
 import { probe } from "../media/ffmpeg.js";
 import { log } from "../log.js";
 import { queueUpgradeIfPlaying, supersedeLower } from "./acquirer.js";
@@ -56,7 +57,10 @@ export function registerMirrorJobs(ctx: Ctx) {
       throw new Error(`mirror verify failed: duration ${p.durationS} vs ${ref}`);
     }
 
-    const rel = libraryPath(t?.title ?? `Title ${v.tmdb_id}`, t?.year ?? null, v.tmdb_id, v.resolution, ext);
+    const ep = isEpisode(v.tmdb_id) ? episodeRow(ctx, v.tmdb_id) : undefined;
+    const rel = ep
+      ? episodeLibraryPath(t?.title ?? ep.show_imdb, t?.year ?? null, ep.season, ep.episode, ep.name, ext)
+      : libraryPath(t?.title ?? `Title ${v.tmdb_id}`, t?.year ?? null, v.tmdb_id, v.resolution, ext);
     const abs = path.join(ctx.cfg.libraryDir, rel);
     await fs.promises.mkdir(path.dirname(abs), { recursive: true });
     await fs.promises.rename(partial, abs);

@@ -27,3 +27,6 @@
 - **Subtitles, round two:** OpenSubtitles lookup when a copy has no English track;
   burn-in or OCR for image-only (PGS) subtitles; prefer releases that carry
   English subtitles for foreign films; a per-profile subtitle language.
+- **TV, round two:** season packs (one transfer for a season, files matched to
+  episodes); "skip intro"; a 4K tier for episodes; My List for shows; shows in
+  "Because you watched".

@@ -1,7 +1,7 @@
 import type { TitleSummary } from "@chill/shared";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api } from "../api";
+import { api, titleHref } from "../api";
 import { FocusGroup, Focusable } from "../components/Focusable";
 import { Card, Page, Spinner, useInitialFocus } from "../components/ui";
 
@@ -51,7 +51,7 @@ export function Browse() {
         <FocusGroup focusKey="grid" className="grid grid-cols-7 gap-5">
           {items.map((t, i) => (
             <div key={`${t.tmdbId}-${i}`} data-row="grid">
-              <Card fill t={t} onEnter={() => nav(`/title/${t.tmdbId}`)} />
+              <Card fill t={t} onEnter={() => nav(titleHref(t))} />
             </div>
           ))}
           {q.hasNextPage && (

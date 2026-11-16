@@ -91,8 +91,8 @@ export function fakeDetail(id: number): TmdbDetail | null {
 }
 
 /** Deterministic gradient poster with the title, for demo mode. */
-export function fakePosterSvg(id: number, backdrop: boolean): string {
-  const m = fakeMovies().find((x) => x.id === id);
+export function fakePosterSvg(id: number, backdrop: boolean, override?: { title: string; year: number }): string {
+  const m = override ? { title: override.title, release_date: `${override.year}` } : fakeMovies().find((x) => x.id === id);
   const title = (m?.title ?? "Untitled").replace(/[<&>]/g, "");
   const h1 = (id * 47) % 360;
   const h2 = (h1 + 60) % 360;

@@ -119,3 +119,13 @@ describe("naming", () => {
     );
   });
 });
+
+describe("TV naming", () => {
+  it("uses Plex's TV layout", async () => {
+    const { episodeLibraryPath } = await import("../src/domain/naming.js");
+    expect(episodeLibraryPath("Stranger Things", 2016, 1, 2, "Chapter Two: The Weirdo on Maple Street", ".MKV")).toBe(
+      "TV Shows/Stranger Things (2016)/Season 01/Stranger Things (2016) - S01E02 - Chapter Two The Weirdo on Maple Street.mkv",
+    );
+    expect(episodeLibraryPath("Show", null, 10, 1, null, "mp4")).toBe("TV Shows/Show/Season 10/Show - S10E01.mp4");
+  });
+});

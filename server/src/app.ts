@@ -15,6 +15,7 @@ import { evictVariant, publishStorage, report, variant } from "./services/storag
 import { pendingUpgrade } from "./services/upgrade.js";
 import { compatResponse, compatStart } from "./services/compat.js";
 import { saveChoice, vttFor } from "./services/subtitles.js";
+import { isEpisode, nextEpisode, searchShows, seasonEpisodes, showDetail, showsHome } from "./services/shows.js";
 
 const hlsCache = new Map<string, { url: string; until: number }>();
 
@@ -88,6 +89,19 @@ export function createApp(ctx: Ctx) {
     const strip = (s: { release: { link: string }; score: number }) => ({ ...s, release: { ...s.release, link: undefined }, score: Math.round(s.score * 100) / 100 });
     return c.json({ instant: r.instant.map(strip), target: r.target.map(strip), dropped: r.dropped });
   });
+
+  // ---- TV shows
+  app.get("/api/shows", async (c) => c.json(await showsHome(ctx, profileOf(c))));
+  app.get("/api/shows/search", async (c) => c.json(await searchShows(ctx, c.req.query("q") ?? "")));
+  app.get("/api/shows/:imdb", async (c) => c.json(await showDetail(ctx, profileOf(c), c.req.param("imdb"))));
+  app.get("/api/shows/:imdb/seasons/:n", async (c) => c.json(await seasonEpisodes(ctx, profileOf(c), c.req.param("imdb"), Number(c.req.param("n")))));
+  /** The episode after this one (null for films and finales). */
+  app.get("/api/titles/:id/next", async (c) => {
+    const id = Number(c.req.param("id"));
+    return c.json(isEpisode(id) ? await nextEpisode(ctx, id) : null);
+  });
+  /** Start fetching without clearing the home cache (next episode, My List). */
+  app.post("/api/titles/:id/prefetch", async (c) => c.json(await play(ctx, Number(c.req.param("id")), profileOf(c), { prefetch: true })));
 
   // ---- play
   app.post("/api/titles/:id/play", async (c) => c.json(await play(ctx, Number(c.req.param("id")), profileOf(c))));

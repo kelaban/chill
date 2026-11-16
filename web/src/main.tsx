@@ -2,7 +2,7 @@ import { init } from "@noriginmedia/norigin-spatial-navigation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { profileId } from "./api";
 import "./index.css";
 import { isBack, isTV } from "./keys";
@@ -15,6 +15,8 @@ import { MyList } from "./pages/MyList";
 import { Profiles } from "./pages/Profiles";
 import { Search } from "./pages/Search";
 import { Watch } from "./pages/Watch";
+import { Show } from "./pages/Show";
+import { Shows } from "./pages/Shows";
 
 // /tv (the webOS shell's entry point) or a webOS user agent turns on TV mode.
 if (location.pathname === "/tv" || location.search.includes("tv=1")) {
@@ -36,6 +38,12 @@ if (tv) document.documentElement.classList.add("tv");
 init({ debug: false, visualDebug: false, throttle: 80, throttleKeypresses: true });
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
+
+/** A fresh player per title, so rolling into the next episode starts clean. */
+function WatchKeyed() {
+  const { id } = useParams();
+  return <Watch key={id} />;
+}
 
 function Shell() {
   const nav = useNavigate();
@@ -63,7 +71,9 @@ function Shell() {
       <Route path="/browse" element={<Browse />} />
       <Route path="/my-list" element={<MyList />} />
       <Route path="/title/:id" element={<Detail />} />
-      <Route path="/watch/:id" element={<Watch />} />
+      <Route path="/watch/:id" element={<WatchKeyed />} />
+      <Route path="/shows" element={<Shows />} />
+      <Route path="/show/:imdb" element={<Show />} />
       <Route path="/downloads" element={<Downloads />} />
       <Route path="/about" element={<About />} />
       <Route path="*" element={<Navigate to="/" replace />} />

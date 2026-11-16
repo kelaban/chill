@@ -46,6 +46,8 @@ export interface TmdbApi {
   movie(id: number): Promise<TmdbDetail>;
   /** Look a film up by IMDb id (e.g. from a chill.institute release). */
   byImdb(imdbId: string): Promise<TmdbMovie | null>;
+  /** Series search, when the catalog has one (Cinemeta does; TMDB would need its own call). */
+  searchShows?(query: string): Promise<TvShowInfo[]>;
   genres(): Promise<{ id: number; name: string }[]>;
   /** Image bytes for the /img proxy. */
   image(size: string, path: string): Promise<{ body: Uint8Array; contentType: string }>;
@@ -102,8 +104,50 @@ export type ResolvedPlayback =
   | { kind: "pending" }
   | { kind: "unavailable"; reason: string };
 
+export type TvSource = "NETFLIX" | "HBO_MAX" | "APPLE_TV_PLUS" | "PRIME_VIDEO" | "DISNEY_PLUS" | "HULU" | "PARAMOUNT_PLUS" | "AMC_PLUS" | "PEACOCK" | "ALL_PROVIDERS";
+
+export interface TvShowInfo {
+  imdbId: string;
+  title: string;
+  year: number | null;
+  /** Absolute image URL, or a path for the /img proxy (demo mode). */
+  posterUrl: string | null;
+  backdropUrl: string | null;
+  rating: number | null;
+  overview: string;
+  seasonCount: number | null;
+  status: string | null;
+  networks: string[];
+  genres: string[];
+  firstAirDate: string | null;
+}
+
+export interface TvSeasonInfo {
+  seasonNumber: number;
+  name: string;
+  episodeCount: number;
+  airDate: string | null;
+  posterUrl: string | null;
+}
+
+export interface TvEpisodeInfo {
+  seasonNumber: number;
+  episodeNumber: number;
+  name: string;
+  overview: string;
+  airDate: string | null;
+  runtime: number | null;
+  stillUrl: string | null;
+  rating: number | null;
+}
+
 export interface ChillApi {
   search(query: string): Promise<Release[]>;
+  tvShows(source: TvSource): Promise<TvShowInfo[]>;
+  tvShowDetail(imdbId: string): Promise<{ show: TvShowInfo; seasons: TvSeasonInfo[] }>;
+  tvSeason(imdbId: string, season: number): Promise<TvEpisodeInfo[]>;
+  /** chill.institute's pick for an episode, or null when it has none. */
+  tvEpisodeDownload(imdbId: string, season: number, episode: number): Promise<Release | null>;
   /** Read-only: never starts a transfer or conversion. */
   resolvePlayback(fileId: number, delivery: "ORIGINAL" | "HLS"): Promise<ResolvedPlayback>;
   /** Only when the user chose to play (chill's API rule). Idempotent. */

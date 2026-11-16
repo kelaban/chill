@@ -151,6 +151,21 @@ export function cinemetaClient(ids: IdStore, base = BASE): TmdbApi {
       const m = await meta(imdbId).catch(() => null);
       return m ? toMovie({ ...m, imdb_id: imdbId }) : null;
     },
+    async searchShows(query) {
+      const r = await get<{ metas: Meta[] }>(`/catalog/series/top/search=${encodeURIComponent(query)}.json`);
+      return r.metas
+        .filter((m) => (m.imdb_id ?? m.id)?.startsWith("tt"))
+        .slice(0, 12)
+        .map((m) => {
+          const imdb = (m.imdb_id ?? m.id)!;
+          const y = (m.releaseInfo ?? m.year ?? "").slice(0, 4);
+          return {
+            imdbId: imdb, title: m.name, year: /^\d{4}$/.test(y) ? Number(y) : null,
+            posterUrl: `/mh/poster/${imdb}`, backdropUrl: `/mh/background/${imdb}`, rating: m.imdbRating ? Number(m.imdbRating) : null,
+            overview: m.description ?? "", seasonCount: null, status: null, networks: [], genres: m.genre ?? m.genres ?? [], firstAirDate: null,
+          };
+        });
+    },
     async genres() {
       return CINEMETA_GENRES;
     },

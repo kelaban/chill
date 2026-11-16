@@ -5,6 +5,7 @@ import type { Ctx } from "../context.js";
 import { cached } from "../db.js";
 import type { TitleFacts } from "../domain/ranker.js";
 import { availability } from "./releases.js";
+import { episodeRow, isEpisode, showRow } from "./shows.js";
 
 const H = 3_600_000;
 
@@ -82,6 +83,7 @@ export async function search(ctx: Ctx, q: string): Promise<TitleSummary[]> {
 
 /** TMDB detail, cached 7 d, and mirrored into `titles` for the ranker and naming. */
 export async function ensureTitle(ctx: Ctx, tmdbId: number): Promise<{ facts: TitleFacts; detail: TmdbDetail }> {
+  if (isEpisode(tmdbId)) return episodeTitle(ctx, tmdbId);
   const detail = await cached(ctx.db, `tmdb:movie:${tmdbId}`, 7 * 24 * H, ctx.clock.now(), () => ctx.svc.tmdb.movie(tmdbId));
   const year = yearOf(detail.release_date);
   ctx.db
@@ -132,9 +134,15 @@ export async function home(ctx: Ctx, profileId: number): Promise<HomeResponse> {
     if (items.length) rows.push({ id, title, items: withReady(items, ready) });
   };
 
-  const cont = ctx.db
-    .prepare("SELECT tmdb_id, position_s, duration_s FROM watch_state WHERE profile_id = ? AND watched = 0 AND position_s > 30 ORDER BY updated_at DESC LIMIT 20")
-    .all(profileId) as { tmdb_id: number; position_s: number; duration_s: number }[];
+  // Films and episodes in progress; a show appears once (its latest episode).
+  const cont = (
+    ctx.db
+      .prepare(
+        `SELECT w.tmdb_id, w.position_s, w.duration_s, e.show_imdb FROM watch_state w LEFT JOIN episodes e ON w.tmdb_id < 0 AND e.id = -w.tmdb_id
+         WHERE w.profile_id = ? AND w.watched = 0 AND w.position_s > 30 ORDER BY w.updated_at DESC LIMIT 40`,
+      )
+      .all(profileId) as { tmdb_id: number; position_s: number; duration_s: number; show_imdb: string | null }[]
+  ).filter((c, i, all) => !c.show_imdb || all.findIndex((x) => x.show_imdb === c.show_imdb) === i).slice(0, 20);
   push("continue", "Continue Watching", summariesFromTitles(ctx, cont.map((c) => ({ tmdb_id: c.tmdb_id, progress: c.duration_s ? c.position_s / c.duration_s : 0 }))));
 
   const mine = ctx.db.prepare("SELECT tmdb_id FROM my_list WHERE profile_id = ? ORDER BY added_at DESC").all(profileId) as { tmdb_id: number }[];
@@ -181,6 +189,21 @@ export async function home(ctx: Ctx, profileId: number): Promise<HomeResponse> {
 
   const hero = trending.find((t) => t.backdropPath) ?? popular[0] ?? null;
   return { hero: hero ? { ...hero, ready: ready.has(hero.tmdbId) } : null, rows };
+}
+
+/** An episode as a title: facts from the episode and its show (no catalog call). */
+function episodeTitle(ctx: Ctx, tmdbId: number): { facts: TitleFacts; detail: TmdbDetail } {
+  const e = episodeRow(ctx, tmdbId);
+  const show = e ? showRow(ctx, e.show_imdb) : undefined;
+  if (!e || !show) throw Object.assign(new Error(`unknown episode ${tmdbId}`), { status: 404 });
+  const detail: TmdbDetail = {
+    id: tmdbId, title: `${show.title} · S${e.season} E${e.episode}`, original_title: show.title, release_date: e.air_date ?? undefined,
+    overview: e.overview ?? show.overview ?? "", poster_path: show.poster_url, backdrop_path: e.still_url ?? show.backdrop_url,
+    vote_average: undefined, runtime: e.runtime_min, genres: (JSON.parse(show.genres_json) as string[]).map((name, i) => ({ id: i, name })),
+    tagline: e.name, imdb_id: null, original_language: null,
+  };
+  // Release names carry the show's title, not the episode's; no year (shows span many).
+  return { facts: { title: show.title, originalTitle: null, year: null, imdbId: null, runtimeMin: e.runtime_min, originalLanguage: null }, detail };
 }
 
 export async function detail(ctx: Ctx, tmdbId: number, profileId: number): Promise<TitleDetail> {

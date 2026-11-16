@@ -1,7 +1,7 @@
 import type { TitleSummary } from "@chill/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { api, img } from "../api";
+import { api, img, titleHref } from "../api";
 import { FocusGroup } from "../components/Focusable";
 import { Button, Page, PlayIcon, Row, Spinner, useInitialFocus } from "../components/ui";
 import { useServerEvents } from "../events";
@@ -13,7 +13,7 @@ export function Home() {
     if (e.type === "play" && e.status.phase === "ready") void refetch();
   });
   useInitialFocus(data?.rows[0]?.id === "continue" ? "row-continue" : "hero-play", !!data);
-  const open = (t: TitleSummary) => nav(`/title/${t.tmdbId}`);
+  const open = (t: TitleSummary) => nav(titleHref(t));
 
   if (isLoading)
     return (
