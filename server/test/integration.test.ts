@@ -15,7 +15,7 @@ import { ensureSamples } from "../src/fakes/samples.js";
 import { fakeServices, type FakePutio } from "../src/fakes/services.js";
 import { setLogSink } from "../src/log.js";
 import { fixedGate } from "../src/adapters/catalogGate.js";
-import { watchOn } from "../src/services/catalog.js";
+import { home, watchOn } from "../src/services/catalog.js";
 
 // End to end through the HTTP API with fake TMDB / chill.institute / put.io,
 // real SQLite, real ffmpeg (alignment, cut detection, probe) and a real HTTP
@@ -364,6 +364,36 @@ describe("where a film streams", () => {
     const off = { ...ctx, catalog: fixedGate("cinemeta") };
     expect(await watchOn(off, 438631)).toBeNull();
     expect(await watchOn(ctx, 438631)).not.toBeNull();
+  });
+});
+
+describe("home rows follow what a profile watches", () => {
+  type Home = { rows: { id: string; title: string; items: { tmdbId: number }[] }[] };
+  it("Horror rises to the first genre row, and 'Because you watched' skips what was seen", async () => {
+    const p = await api<{ id: number }>("POST", "/api/profiles", { name: "Horror fan" });
+    const before = await api<Home>("GET", `/api/home?profile=${p.id}`);
+    const genres = (h: Home) => h.rows.filter((r) => r.id.startsWith("genre-")).map((r) => r.id);
+    expect(genres(before)[0]).toBe("genre-action");
+    expect(before.rows.some((r) => r.id.startsWith("because"))).toBe(false);
+
+    const seen = [348, 578, 419430]; // Alien, Jaws, Get Out
+    for (const tmdbId of seen) {
+      await api("POST", "/api/progress", { profileId: p.id, tmdbId, variantId: "none", positionS: 100, durationS: 100, event: "end" });
+      await advance(1000);
+    }
+    const after = await api<Home>("GET", `/api/home?profile=${p.id}`);
+    expect(genres(after)[0]).toBe("genre-horror");
+    const because = after.rows.filter((r) => r.id.startsWith("because"));
+    expect(because[0]!.title).toBe("Because you watched Get Out");
+    const shown = because.flatMap((r) => r.items.map((i) => i.tmdbId));
+    expect(shown.some((id) => seen.includes(id))).toBe(false);
+    expect(new Set(shown).size).toBe(shown.length); // the two rows never repeat a film
+    expect(because.length).toBe(2); // TMDB on: a row for each of the two latest films
+    // TMDB off (Cinemeta has no real recommendations): one row at most.
+    const off = await home({ ...ctx, catalog: fixedGate("cinemeta") }, p.id);
+    expect(off.rows.filter((r) => r.id.startsWith("because")).length).toBe(1);
+    // Another profile's home is untouched.
+    expect(genres(await api<Home>("GET", "/api/home?profile=1"))[0]).not.toBe("genre-horror");
   });
 });
 

@@ -48,7 +48,7 @@ action, put.io usage stays < 100 GB and local < 100 GB through a 20-movie soak t
 
 Hero banner with backdrop motion, OMDb ratings (IMDb / RT / Metacritic), full
 Browse page (genre, year, rating, runtime, language filters, infinite grid),
-"Because you watched…", "New on digital", My List with background prefetch,
+"Because you watched…" (built: TMDB recommendations, two rows, genre rows by taste — D48), "New on digital", My List with background prefetch,
 availability badges, trailers on detail, profile avatars, TMDB attribution,
 performance pass on the TV (virtualized rows, image sizes, 60 fps focus).
 **Exit:** the household stops opening chill.institute and Plex directly.

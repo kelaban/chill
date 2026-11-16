@@ -7,6 +7,7 @@ import type { TitleFacts } from "../domain/ranker.js";
 import { availability } from "./releases.js";
 import { providerServices } from "../domain/services.js";
 import { episodeRow, isEpisode, showRow } from "./shows.js";
+import { becauseRows, becauseSeeds, genreAffinity, pickGenreRows, type Watched } from "../domain/taste.js";
 
 const H = 3_600_000;
 
@@ -127,9 +128,31 @@ export function watchState(ctx: Ctx, profileId: number, tmdbId: number) {
     | undefined;
 }
 
-const GENRE_ROWS: [number, string][] = [
-  [28, "Action"], [878, "Sci-Fi"], [35, "Comedy"], [53, "Thrillers"], [18, "Drama"], [16, "Animation"],
+/** Genres that can have a row (TMDB ids; Cinemeta maps the same ids). */
+const GENRE_POOL: { id: number; name: string }[] = [
+  { id: 28, name: "Action" }, { id: 878, name: "Sci-Fi" }, { id: 35, name: "Comedy" }, { id: 53, name: "Thrillers" }, { id: 18, name: "Drama" },
+  { id: 16, name: "Animation" }, { id: 27, name: "Horror" }, { id: 80, name: "Crime" }, { id: 10749, name: "Romance" }, { id: 12, name: "Adventure" },
+  { id: 14, name: "Fantasy" }, { id: 9648, name: "Mystery" }, { id: 99, name: "Documentary" }, { id: 10751, name: "Family" },
+  { id: 10752, name: "War" }, { id: 37, name: "Western" }, { id: 36, name: "History" },
 ];
+/** The household default, used until a profile's history says otherwise. */
+const DEFAULT_GENRES = [28, 878, 35, 53, 18, 16];
+
+/** The profile's recent films (episodes aside), with genres from the cached catalog detail. */
+async function history(ctx: Ctx, profileId: number): Promise<Watched[]> {
+  const rows = ctx.db
+    .prepare("SELECT tmdb_id, position_s, duration_s, watched, updated_at FROM watch_state WHERE profile_id = ? AND tmdb_id > 0 ORDER BY updated_at DESC LIMIT 20")
+    .all(profileId) as { tmdb_id: number; position_s: number; duration_s: number; watched: number; updated_at: number }[];
+  const out = await Promise.all(
+    rows.map(async (r) => {
+      const t = await ensureTitle(ctx, r.tmdb_id).catch(() => null);
+      if (!t) return null;
+      const fraction = r.watched ? 1 : r.duration_s ? r.position_s / r.duration_s : 0;
+      return { tmdbId: r.tmdb_id, title: t.detail.title, genreIds: t.detail.genres.map((g) => g.id), fraction, at: r.updated_at };
+    }),
+  );
+  return out.filter((w): w is Watched => w !== null);
+}
 
 export async function home(ctx: Ctx, profileId: number): Promise<HomeResponse> {
   const ready = readySet(ctx);
@@ -166,30 +189,38 @@ export async function home(ctx: Ctx, profileId: number): Promise<HomeResponse> {
   push("recent", "Recent", summariesFromTitles(ctx, recent));
 
   const settle = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
+  const watched = await history(ctx, profileId);
+  const genreRows = pickGenreRows(GENRE_POOL, DEFAULT_GENRES, genreAffinity(watched, ctx.clock.now()));
   const [trending, popular, topRated, nowPlaying, ...genreLists] = await Promise.all([
     settle(list(ctx, "trending"), []),
     settle(list(ctx, "popular"), []),
     settle(list(ctx, "top_rated"), []),
     settle(list(ctx, "now_playing"), []),
-    ...GENRE_ROWS.map(([g]) => settle(discover(ctx, { genre: g }).then((r) => r.results), [] as TitleSummary[])),
+    ...genreRows.map((g) => settle(discover(ctx, { genre: g.id }).then((r) => r.results), [] as TitleSummary[])),
   ]);
 
-  const last = ctx.db
-    .prepare("SELECT tmdb_id FROM watch_state WHERE profile_id = ? ORDER BY updated_at DESC LIMIT 1")
-    .pluck()
-    .get(profileId) as number | undefined;
-  let because: { title: string; items: TitleSummary[] } | null = null;
-  if (last) {
-    const d = await ensureTitle(ctx, last).catch(() => null);
-    if (d?.detail.recommendations?.results.length) because = { title: `Because you watched ${d.detail.title}`, items: d.detail.recommendations.results.map(toSummary) };
-  }
+  // "Because you watched": TMDB's real recommendations for the two latest films
+  // watched, minus anything already seen and anything the other row shows. With
+  // Cinemeta (no recommendations, only same-genre popular titles) one row at most.
+  const seeds = becauseSeeds(watched, ctx.catalog.tmdb ? 2 : 1);
+  const seen = new Set(ctx.db.prepare("SELECT tmdb_id FROM watch_state WHERE profile_id = ?").pluck().all(profileId) as number[]);
+  const because = becauseRows(
+    await Promise.all(
+      seeds.map(async (seed) => ({
+        seed,
+        recs: ((await ensureTitle(ctx, seed.tmdbId).catch(() => null))?.detail.recommendations?.results ?? []).filter((m) => m.poster_path).map(toSummary),
+      })),
+    ),
+    seen,
+  );
 
   push("trending", "Trending Now", trending);
-  if (because) push("because", because.title, because.items);
+  if (because[0]) push("because", `Because you watched ${because[0].seed.title}`, because[0].items);
   push("popular", "Popular on chill", popular);
+  if (because[1]) push("because-2", `Because you watched ${because[1].seed.title}`, because[1].items);
   push("top-rated", "Top Rated", topRated);
   push("now-playing", "New Releases", nowPlaying);
-  GENRE_ROWS.forEach(([, name], i) => push(`genre-${name.toLowerCase()}`, name, genreLists[i] ?? []));
+  genreRows.forEach((g, i) => push(`genre-${g.name.toLowerCase()}`, g.name, genreLists[i] ?? []));
 
   const hero = trending.find((t) => t.backdropPath) ?? popular[0] ?? null;
   return { hero: hero ? { ...hero, ready: ready.has(hero.tmdbId) } : null, rows };
