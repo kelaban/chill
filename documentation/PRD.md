@@ -117,8 +117,8 @@ a 20 GB file takes ~5 min at 500 Mbps, ~27 min at 100 Mbps.
 - Secrets (TMDB, OMDb, chill, put.io tokens) live only on the server. Signed
   put.io URLs are never logged.
 - **The TV is an LG OLED G3 (2023).** It shipped with webOS 23 (Chromium 94 web
-  engine) and is eligible for LG's yearly webOS Re:New upgrades (24, 25), so the
-  real engine may be newer — Phase 0 reads it. HEVC, AV1, Dolby Vision, HDR10,
+  engine) and has been upgraded via webOS Re:New to webOS 11.2 — Chromium 132,
+  measured in Phase 0. HEVC, AV1, Dolby Vision, HDR10,
   Dolby Atmos; DTS expected to work (LG only dropped it in 2025); **Google Cast**
   arrived via firmware 23.20.50 / webOS 24.
 
@@ -133,7 +133,7 @@ a 20 GB file takes ~5 min at 500 Mbps, ~27 min at 100 Mbps.
 
 | Question | Answer (2026-11-16) | Consequence |
 |---|---|---|
-| TV | LG OLED G3 (2023), confirmed | Build for Chromium 94 (webOS 23) until Phase 0 confirms a newer engine; Tailwind v3. |
+| TV | LG OLED G3 (2023), confirmed | Build for Chromium 132 (webOS 11.2, measured in Phase 0); Tailwind v3 for now. |
 | Chromecast? | Built into the TV (Google Cast, firmware ≥ 23.20.50) | Phone → TV casting needs no extra device; it's also the fallback if Developer Mode sideloading breaks. |
 | Home downlink | "Good enough" | Mirroring speed isn't a design constraint. |
 | Watch outside the home? | No | LAN-only; no Tailscale, no remote access phase. |

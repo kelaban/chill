@@ -16,7 +16,7 @@ skipped for now (Cinemeta stands in). Open items wait on:
 
 | # | Decision (as built) | Assumption behind it | Revisit when / how | Waits on |
 |---|---|---|---|---|
-| D1 | Build target **Chromium 94**, Tailwind **v3** | G3 shipped webOS 23; may have been upgraded to 24/25 | Read `navigator.userAgent` on the TV (About page shows it). If ≥ 111, Tailwind v4 is possible; ≥ 108 raises `TV_TARGET` in `web/vite.config.ts` | 📺 |
+| D1 | Build target **Chromium 132**, Tailwind **v3** | ✅ Measured 2026-11-15: the TV runs webOS 11.2, UA `Chrome/132.0.6834.207` (was a Chromium 94 floor). `TV_TARGET` raised | Tailwind v4 is now possible (≥ 111) but not migrated. Re-check the UA after a webOS update | 📺 |
 | D2 | `TV_TWO_DECODERS=1`: seamless handoff runs two `<video>` decoders for ~1.2 s | The G3 can decode the playing copy and pre-roll the 4K copy at once | Phase 0 S1 step 4. If not, set `TV_TWO_DECODERS=0` → black-segment / natural-break modes (already built) | 📺 |
 | D3 | `TV_SWAP_LATENCY_MS=800` for black-segment switches | Typical single-element source swap on a TV | Measure in Phase 0; it sets which black segments are long enough to hide a swap | 📺 |
 | D4 | Ranker soft-penalizes **TrueHD and DTS** (4 points), drops nothing for audio | G3 decodes DTS (LG only dropped it in 2025); TrueHD in a web app is unverified | Fill the Phase 0 codec matrix; move confirmed-bad codecs to `unsupportedAudio`, confirmed-good out of `riskyAudio` (`settings.device`) | 📺 |

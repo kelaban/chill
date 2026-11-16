@@ -73,10 +73,10 @@ alignment and the seamless switch, so most work never needs real credentials.
   URLs are fetched per request and never logged or stored.
 - **Be a good API citizen.** chill.institute: cache searches 12 h, concurrency ≤ 2,
   no bulk availability scans. TMDB: cache, and show attribution.
-- **Target the TV, not your laptop.** LG OLED G3 (2023). It shipped with webOS 23
-  (Chromium 94) and may since have been upgraded; until Phase 0 reads its real user
-  agent, build for the floor: Vite `build.target: "chrome94"`, Tailwind v3 (v4
-  needs Chromium 111). Keep animations to transforms/opacity (TV CPUs are weak);
+- **Target the TV, not your laptop.** LG OLED G3 (2023), upgraded to webOS 11.2 —
+  its user agent reports **Chromium 132** (measured 2026-11-15). Vite
+  `build.target: "chrome132"`. Still on Tailwind v3; v4 (needs 111) is now
+  possible but not migrated. Keep animations to transforms/opacity (TV CPUs are weak);
   test focus with D-pad *and* pointer.
 - **Upgrades never ask.** A better copy swaps in seamlessly (aligned, on a scene
   cut). Don't add prompts or toasts for it; see `ARCHITECTURE.md` → *Seamless upgrade*.

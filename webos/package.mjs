@@ -14,7 +14,7 @@ const stage = path.join(here, "dist", "app");
 fs.rmSync(path.join(here, "dist"), { recursive: true, force: true });
 fs.mkdirSync(path.join(stage, "assets"), { recursive: true });
 fs.copyFileSync(path.join(here, "appinfo.json"), path.join(stage, "appinfo.json"));
-fs.writeFileSync(path.join(stage, "index.html"), fs.readFileSync(path.join(here, "index.html"), "utf8").replace("__CHILL_URL__", url));
+fs.writeFileSync(path.join(stage, "index.html"), fs.readFileSync(path.join(here, "index.html"), "utf8").replaceAll("__CHILL_URL__", url));
 for (const f of fs.readdirSync(path.join(here, "assets"))) fs.copyFileSync(path.join(here, "assets", f), path.join(stage, "assets", f));
 execFileSync("npx", ["--yes", "-p", "@webos-tools/cli@3", "ares-package", stage, "-o", path.join(here, "dist")], { stdio: "inherit" });
 const ipk = fs.readdirSync(path.join(here, "dist")).find((f) => f.endsWith(".ipk"));

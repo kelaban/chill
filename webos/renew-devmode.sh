@@ -8,7 +8,8 @@
 set -euo pipefail
 DEVICE="${1:-tv}"
 ARES="npx --yes -p @webos-tools/cli@3"
-TOKEN="$($ARES ares-novacom -d "$DEVICE" --run "cat /var/luna/preferences/devmode_enabled" | tr -d '[:space:]')"
+# ares-novacom prints "[Info] Set target device : <name>" on stdout; drop it.
+TOKEN="$($ARES ares-novacom -d "$DEVICE" --run "cat /var/luna/preferences/devmode_enabled" 2>/dev/null | grep -v '^\[' | tr -d '[:space:]')"
 if [ -z "$TOKEN" ]; then echo "could not read the dev-mode session token" >&2; exit 1; fi
 curl -fsS "https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${TOKEN}" >/dev/null
 echo "developer mode session renewed for $DEVICE"

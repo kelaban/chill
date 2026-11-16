@@ -1,9 +1,9 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// The LG OLED G3 shipped with webOS 23 = Chromium 94. Build for that floor
-// until Phase 0 reads the TV's real engine (documentation/DECISIONS.md).
-export const TV_TARGET = "chrome94";
+// The household's LG OLED G3 runs webOS 11.2 = Chromium 132 (user agent read
+// on the TV in Phase 0, 2026-11-15; documentation/DECISIONS.md D1).
+export const TV_TARGET = "chrome132";
 
 export default defineConfig({
   plugins: [react()],

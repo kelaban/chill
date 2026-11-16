@@ -54,6 +54,19 @@ only the decision record below survives.
 
 **Output:** the table filled in; seamless-switch measurements; renewal approach.
 
+**Results so far (2026-11-15):**
+- Model **OLED65G3PUA**, firmware **43.21.96**, `webos_release` **11.2.0**
+  (platform 11, built 2026-10-15) — upgraded well past webOS 23.
+- User agent (read via `ares-inspect` → `/json/version`):
+  `Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.6834.207 Safari/537.36`
+  → **Chromium 132**: ≥ 108 and ≥ 111, so both the build target and Tailwind v4
+  are unblocked (D1). Build target raised to `chrome132`; Tailwind still v3.
+- Developer Mode on; TV registered as ares device `tv` (192.168.1.193:9922). The
+  key passphrase is case-sensitive — enter it exactly as shown (upper case).
+- `/var/luna/preferences/devmode_enabled` is readable (64-char token), so
+  `renew-devmode.sh` can at least fetch the token; the renewal call itself is
+  still unverified.
+
 ## S2. chill.institute: is ranking good enough?
 
 1. Get a token via `chilly auth login` (it prints the token page).
@@ -95,7 +108,7 @@ for the Cast sender on the LAN, and if so plan local TLS for Phase 5.
 
 | Decision | Options | Chosen | Evidence |
 |---|---|---|---|
-| Chromium build target | chrome94 floor / higher if upgraded | | S1 step 1 user agent |
+| Chromium build target | chrome94 floor / higher if upgraded | **chrome132** (webOS 11.2) | S1 step 1 user agent |
 | Seamless handoff | two-element / single-element at black segment / natural break only | | S1 step 4 |
 | Local playback engine | own (direct + remux) / Jellyfin | | S1 rows 3, 4, 9 |
 | Default target profile | 2160p HDR WEB-DL ≤ 25 GB / 1080p x265 ≤ 12 GB | | S1, S4 disk |

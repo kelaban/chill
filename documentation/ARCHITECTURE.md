@@ -72,10 +72,10 @@
 | Downloads | `aria2c` (multi-connection, resumable) via JSON-RPC | Saturates the home link; restarts cleanly. |
 | Media tools | `ffprobe` always; `ffmpeg` for remux/audio only | Know exactly what each file is; never video-transcode. |
 | Client | React 18 + Vite + TanStack Query + React Router | |
-| Styling | Tailwind v3.4 | v4 needs Chromium ≥ 111; the G3 shipped with Chromium 94. |
+| Styling | Tailwind v3.4 | Chosen when the floor was Chromium 94. The TV now runs Chromium 132, so v4 (≥ 111) is possible; migration not done. |
 | TV focus | `@noriginmedia/norigin-spatial-navigation` | D-pad focus management; Magic Remote pointer works natively. |
 | Video | `<video>` + native HLS on webOS; `hls.js` elsewhere | webOS's media pipeline handles HLS and HEVC in hardware. |
-| Build target | Vite `build.target: "chrome94"` | webOS 23, the G3's floor; raised if Phase 0 finds a newer engine. CI fails if the output needs anything newer. |
+| Build target | Vite `build.target: "chrome132"` | The G3's measured engine (webOS 11.2, Chromium 132; Phase 0). CI fails if the output needs anything newer. |
 | Seamless switch | Two `<video>` elements + `requestVideoFrameCallback`; ffmpeg audio cross-correlation + `scdet` on the server | See *Seamless upgrade*. |
 | Tests | Vitest; MSW fixtures for TMDB/chill/put.io | |
 | Deploy | `git pull` + `docker compose up -d --build` on the home server (farnsworth) | Image built on the host; no registry. See [`DEPLOY.md`](DEPLOY.md). |
@@ -233,9 +233,9 @@ if the firmware allows. Fallbacks if sideloading fails: **Google Cast**, built i
 the G3 via firmware 23.20.50 (phone browses, TV plays), the TV's browser, or Plex/Jellyfin on the same
 library.
 
-The TV is an LG OLED G3 (2023): shipped with webOS 23 / Chromium 94, eligible
-for LG's webOS Re:New upgrades (24, 25), so its real engine is read from the user
-agent in Phase 0. It decodes HEVC, AV1, Dolby Vision and HDR10 in hardware, and
+The TV is an LG OLED G3 (2023), model OLED65G3PUA: it shipped with webOS 23 /
+Chromium 94 and has since been upgraded through webOS Re:New to webOS 11.2
+(firmware 43.21.96), whose user agent reports Chromium 132. It decodes HEVC, AV1, Dolby Vision and HDR10 in hardware, and
 DTS is expected to work (LG only dropped it in 2025). Whatever audio Phase 0
 finds unplayable (TrueHD is the likely one) the ranker filters until Phase 4 can
 re-encode it.
