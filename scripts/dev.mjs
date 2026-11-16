@@ -10,9 +10,12 @@ if (fs.existsSync("docker/.env")) {
     if (m && m[2] && !env[m[1]]) env[m[1]] = m[2];
   }
 }
-if (!env.TMDB_TOKEN || !env.CHILL_TOKEN || !env.PUTIO_TOKEN) {
+// TMDB is optional (Cinemeta stands in); chill.institute and put.io are not.
+if (!env.CHILL_TOKEN || !env.PUTIO_TOKEN) {
   env.CHILL_FAKE ??= "1";
-  console.log("No API tokens found: starting in demo mode (CHILL_FAKE=1).");
+  console.log("No CHILL_TOKEN/PUTIO_TOKEN found: starting in demo mode (CHILL_FAKE=1).");
+} else {
+  console.log(`Real mode: chill.institute + put.io, catalog = ${env.TMDB_TOKEN ? "TMDB" : "Cinemeta (keyless)"}.`);
 }
 const procs = [
   spawn("npx", ["tsx", "watch", "server/src/main.ts"], { stdio: "inherit", env }),
