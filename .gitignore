@@ -6,3 +6,9 @@ server/public/
 /data/
 spikes/
 .DS_Store
+*.db
+*.db-*
+data/
+test-results/
+web/dist/
+server/dist/

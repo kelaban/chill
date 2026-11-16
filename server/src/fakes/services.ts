@@ -1,0 +1,263 @@
+import fs from "node:fs";
+import path from "node:path";
+import type { ChillApi, PutioApi, PutioFile, PutioTransfer, Services, TmdbApi, TmdbMovie } from "../adapters/types.js";
+import type { Release } from "../domain/release.js";
+import { normalizeTitle } from "../domain/release.js";
+import type { Clock } from "../jobs.js";
+import { FAKE_NO_RELEASES_ID, fakeDetail, fakeMovies, fakePosterSvg, GENRES } from "./catalog.js";
+import type { Samples } from "./samples.js";
+
+// Stand-ins for TMDB, chill.institute and put.io that behave like the real
+// things (latency, progress over time, quota, folders) so demo mode and the
+// integration tests exercise the same code paths as production.
+
+// ---------------------------------------------------------------- TMDB
+
+export function fakeTmdb(): TmdbApi {
+  const all = fakeMovies().filter((m) => m.id !== FAKE_NO_RELEASES_ID);
+  const page = (xs: TmdbMovie[], p = 1, size = 20) => xs.slice((p - 1) * size, p * size);
+  return {
+    async list(kind, p = 1) {
+      const byPop = [...all].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+      if (kind === "trending") return page(byPop.filter((_, i) => i % 2 === 0), p);
+      if (kind === "popular") return page(byPop, p);
+      if (kind === "top_rated") return page([...all].sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0)), p);
+      if (kind === "now_playing") return page(all.filter((m) => Number(m.release_date?.slice(0, 4)) >= 2019), p);
+      return [];
+    },
+    async discover(q) {
+      let xs = all.filter((m) => !q.genre || m.genre_ids?.includes(q.genre));
+      if (q.yearFrom) xs = xs.filter((m) => Number(m.release_date?.slice(0, 4)) >= q.yearFrom!);
+      if (q.yearTo) xs = xs.filter((m) => Number(m.release_date?.slice(0, 4)) <= q.yearTo!);
+      if (q.minRating) xs = xs.filter((m) => (m.vote_average ?? 0) >= q.minRating!);
+      if (q.sort === "vote_average.desc") xs.sort((a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0));
+      else if (q.sort === "primary_release_date.desc") xs.sort((a, b) => (b.release_date ?? "").localeCompare(a.release_date ?? ""));
+      return { results: page(xs, q.page), totalPages: Math.max(1, Math.ceil(xs.length / 20)) };
+    },
+    async search(query) {
+      const n = normalizeTitle(query);
+      return fakeMovies().filter((m) => normalizeTitle(m.title).includes(n));
+    },
+    async movie(id) {
+      const d = fakeDetail(id);
+      if (!d) throw Object.assign(new Error(`TMDB /movie/${id} → HTTP 404`), { status: 404 });
+      return d;
+    },
+    async genres() {
+      return GENRES;
+    },
+    async image(_size, p) {
+      const m = /\/?fake\/(\d+)(-bd)?\.svg$/.exec(p);
+      return { body: new TextEncoder().encode(fakePosterSvg(m ? Number(m[1]) : 0, !!m?.[2])), contentType: "image/svg+xml" };
+    },
+  };
+}
+
+// ---------------------------------------------------------------- chill.institute
+
+interface FakeReleaseSpec {
+  key: string;
+  resolution: string;
+  quality: string;
+  codec: string;
+  hdr?: string;
+  audio: string;
+  size: number;
+  seeders: number;
+  yearDelta?: number;
+}
+
+const SPECS: FakeReleaseSpec[] = [
+  { key: "cam", resolution: "1080p", quality: "CAM", codec: "x264", audio: "AAC", size: 1.5e9, seeders: 900 },
+  { key: "720", resolution: "720p", quality: "WEB-DL", codec: "x264", audio: "AAC", size: 1.4e9, seeders: 60 },
+  { key: "1080", resolution: "1080p", quality: "WEB-DL", codec: "x264", audio: "DDP5.1", size: 4.2e9, seeders: 300 },
+  { key: "1080hdr", resolution: "1080p", quality: "WEB-DL", codec: "x265", hdr: "HDR10", audio: "DDP5.1", size: 3.1e9, seeders: 420 },
+  { key: "2160hdr", resolution: "2160p", quality: "WEB-DL", codec: "x265", hdr: "HDR10", audio: "DDP5.1 Atmos", size: 16.4e9, seeders: 140 },
+  { key: "2160dv", resolution: "2160p", quality: "WEB-DL", codec: "H.265", hdr: "DV", audio: "DDP5.1 Atmos", size: 19.8e9, seeders: 30 },
+  { key: "remux", resolution: "2160p", quality: "BluRay REMUX", codec: "HEVC", hdr: "DV HDR10", audio: "TrueHD Atmos", size: 62e9, seeders: 25 },
+  { key: "remake", resolution: "1080p", quality: "WEB-DL", codec: "x264", audio: "AAC", size: 3e9, seeders: 500, yearDelta: 30 },
+];
+
+export function fakeReleaseSize(link: string): { tmdbId: number; key: string; size: number; resolution: number } | null {
+  const m = /^fake:\/\/(\d+)\/([a-z0-9]+)$/.exec(link);
+  if (!m) return null;
+  const spec = SPECS.find((s) => s.key === m[2]);
+  if (!spec) return null;
+  return { tmdbId: Number(m[1]), key: spec.key, size: spec.size, resolution: parseInt(spec.resolution, 10) };
+}
+
+export function fakeChill(opts: { mediaUrl: (fileId: number) => string; latencyMs?: number }): ChillApi {
+  const wait = () => new Promise((r) => setTimeout(r, opts.latencyMs ?? 150));
+  return {
+    async search(query): Promise<Release[]> {
+      await wait();
+      const q = normalizeTitle(query.replace(/\b(19|20)\d{2}\b/, ""));
+      const movie = fakeMovies().find((m) => normalizeTitle(m.title) === q);
+      if (!movie || movie.id === FAKE_NO_RELEASES_ID) return [];
+      const year = Number(movie.release_date?.slice(0, 4));
+      const imdb = fakeDetail(movie.id)?.imdb_id ?? undefined;
+      return SPECS.map((s) => ({
+        id: `${movie.id}-${s.key}`,
+        rawTitle: `${movie.title.replace(/\W+/g, ".")}.${year + (s.yearDelta ?? 0)}.${s.resolution}.${s.quality}.${s.codec}-FAKE`,
+        indexer: "fake",
+        link: `fake://${movie.id}/${s.key}`,
+        imdbId: s.yearDelta ? undefined : imdb,
+        seeders: s.seeders,
+        peers: s.seeders * 2,
+        sizeBytes: s.size,
+        info: { title: movie.title, year: year + (s.yearDelta ?? 0), resolution: s.resolution, quality: s.quality, codec: s.codec, hdr: s.hdr, audio: s.audio },
+      }));
+    },
+    async resolvePlayback(fileId, delivery) {
+      if (delivery === "HLS") return { kind: "unavailable", reason: "UNAVAILABLE_REASON_CONVERSION_REQUIRED" };
+      return { kind: "ready", url: opts.mediaUrl(fileId), subtitles: [] };
+    },
+    async startConversion() {
+      return "unavailable";
+    },
+  };
+}
+
+// ---------------------------------------------------------------- put.io
+
+interface FakeTransfer {
+  id: number;
+  name: string;
+  link: string;
+  parentId: number;
+  size: number;
+  startedAt: number;
+  durationMs: number;
+  cancelled: boolean;
+  fileId: number | null;
+}
+
+interface FakeFile extends PutioFile {
+  /** Real bytes served for this VIDEO file. */
+  sample?: "instant" | "target";
+}
+
+interface FakeState {
+  nextId: number;
+  files: FakeFile[];
+  transfers: FakeTransfer[];
+}
+
+export interface FakePutio extends PutioApi {
+  /** Local path of the bytes behind a fake put.io VIDEO file. */
+  mediaPath(fileId: number): string | null;
+  state(): FakeState;
+}
+
+export function fakePutio(opts: {
+  clock: Clock;
+  samples: Samples | null;
+  stateFile?: string;
+  quotaBytes?: number;
+  timings: { instantS: number; targetS: number };
+  mediaUrl: (fileId: number) => string;
+}): FakePutio {
+  let st: FakeState = { nextId: 1000, files: [], transfers: [] };
+  if (opts.stateFile && fs.existsSync(opts.stateFile)) st = JSON.parse(fs.readFileSync(opts.stateFile, "utf8")) as FakeState;
+  const save = () => {
+    if (opts.stateFile) {
+      fs.mkdirSync(path.dirname(opts.stateFile), { recursive: true });
+      fs.writeFileSync(opts.stateFile, JSON.stringify(st));
+    }
+  };
+  const id = () => st.nextId++;
+  const quota = opts.quotaBytes ?? 100e9;
+  const used = () => st.files.filter((f) => f.fileType !== "FOLDER").reduce((s, f) => s + f.size, 0);
+
+  function settle(t: FakeTransfer): PutioTransfer {
+    const elapsed = opts.clock.now() - t.startedAt;
+    const pct = t.cancelled ? 0 : Math.min(100, Math.floor((elapsed / t.durationMs) * 100));
+    if (pct >= 100 && t.fileId === null) {
+      const folder: FakeFile = { id: id(), name: t.name, size: 0, fileType: "FOLDER", parentId: t.parentId };
+      const meta = fakeReleaseSize(t.link);
+      const video: FakeFile = {
+        id: id(), name: `${t.name}.mp4`, size: t.size, fileType: "VIDEO", parentId: folder.id, contentType: "video/mp4",
+        sample: meta && meta.resolution >= 2160 ? "target" : "instant",
+      };
+      const nfo: FakeFile = { id: id(), name: `${t.name}.nfo`, size: 2_000, fileType: "TEXT", parentId: folder.id };
+      st.files.push(folder, video, nfo);
+      t.fileId = folder.id;
+      save();
+    }
+    const done = pct >= 100;
+    return {
+      id: t.id, name: t.name, size: t.size, fileId: t.fileId, error: null,
+      status: t.cancelled ? "ERROR" : done ? "COMPLETED" : pct === 0 ? "IN_QUEUE" : "DOWNLOADING",
+      percentDone: pct,
+      etaS: done ? 0 : Math.max(1, Math.round((t.durationMs - elapsed) / 1000)),
+    };
+  }
+
+  const api: FakePutio = {
+    async ensureFolder(name) {
+      const f = st.files.find((x) => x.fileType === "FOLDER" && x.parentId === 0 && x.name === name);
+      if (f) return f.id;
+      const folder = { id: id(), name, size: 0, fileType: "FOLDER", parentId: 0 };
+      st.files.push(folder);
+      save();
+      return folder.id;
+    },
+    async addTransfer(link, parentId) {
+      const meta = fakeReleaseSize(link);
+      if (!meta) throw Object.assign(new Error("put.io /transfers/add → HTTP 400: invalid url"), { status: 400 });
+      if (used() + meta.size > quota) throw Object.assign(new Error("put.io /transfers/add → HTTP 403: not enough disk space"), { status: 403 });
+      const t: FakeTransfer = {
+        id: id(), name: `${meta.tmdbId}.${meta.key}`, link, parentId, size: meta.size, startedAt: opts.clock.now(),
+        durationMs: (meta.resolution >= 2160 ? opts.timings.targetS : opts.timings.instantS) * 1000, cancelled: false, fileId: null,
+      };
+      st.transfers.push(t);
+      save();
+      return settle(t);
+    },
+    async getTransfer(tid) {
+      const t = st.transfers.find((x) => x.id === tid);
+      if (!t) throw Object.assign(new Error(`put.io /transfers/${tid} → HTTP 404`), { status: 404 });
+      return settle(t);
+    },
+    async cancelTransfers(ids) {
+      for (const t of st.transfers) if (ids.includes(t.id)) t.cancelled = true;
+      save();
+    },
+    async listFiles(parentId) {
+      return st.files.filter((f) => f.parentId === parentId).map(({ sample: _s, ...f }) => f);
+    },
+    async getFile(fid) {
+      const f = st.files.find((x) => x.id === fid);
+      if (!f) throw Object.assign(new Error(`put.io /files/${fid} → HTTP 404`), { status: 404 });
+      const { sample: _s, ...rest } = f;
+      return rest;
+    },
+    async downloadUrl(fid) {
+      return opts.mediaUrl(fid);
+    },
+    async deleteFiles(ids) {
+      const doomed = new Set(ids);
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (const f of st.files) if (!doomed.has(f.id) && doomed.has(f.parentId)) (doomed.add(f.id), (grew = true));
+      }
+      st.files = st.files.filter((f) => !doomed.has(f.id));
+      save();
+    },
+    async accountDisk() {
+      return { size: quota, used: used(), avail: quota - used() };
+    },
+    mediaPath(fid) {
+      const f = st.files.find((x) => x.id === fid);
+      if (!f?.sample || !opts.samples) return null;
+      return opts.samples[f.sample];
+    },
+    state: () => st,
+  };
+  return api;
+}
+
+export function fakeServices(o: Parameters<typeof fakePutio>[0] & { chillLatencyMs?: number }): Services & { putio: FakePutio } {
+  return { tmdb: fakeTmdb(), chill: fakeChill({ mediaUrl: o.mediaUrl, latencyMs: o.chillLatencyMs }), putio: fakePutio(o) };
+}

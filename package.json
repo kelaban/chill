@@ -1,0 +1,24 @@
+{
+  "name": "chill",
+  "private": true,
+  "type": "module",
+  "workspaces": ["shared", "server", "web"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "demo": "npm run build && CHILL_FAKE=1 node server/dist/main.js",
+    "typecheck": "tsc -p shared && tsc -p server --noEmit && tsc -p web --noEmit",
+    "test": "vitest run",
+    "test:e2e": "node scripts/e2e.mjs",
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "build": "npm run build -w web && npm run build -w server",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "webos:package": "node webos/package.mjs",
+    "media:samples": "node scripts/make-samples.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
