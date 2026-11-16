@@ -289,9 +289,17 @@ function Player({ tmdbId, title, stream, startAtS, onExit }: { tmdbId: number; t
             <span data-testid="position">{fmtTime(pos)}</span>
             <span>-{fmtTime(Math.max(0, dur - pos))}</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-white/25">
-            <div className="h-full bg-accent" style={{ width: `${dur ? (pos / dur) * 100 : 0}%` }} />
-          </div>
+          <Scrubber
+            pos={pos}
+            dur={dur}
+            active={osd || !playing}
+            onActivity={poke}
+            onSeek={(t) => {
+              engine.current?.seekTo(t);
+              setPos(t);
+              report("seek");
+            }}
+          />
           <div className="mt-5 flex gap-8 text-xl text-white/70">
             <span data-testid="subtitle-label">Subtitles: {curSub ? curSub.label : "Off"}</span>
             <span className="text-white/40">↓ subtitles · OK pause · Back exit</span>
@@ -358,4 +366,67 @@ export function cueHtml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/&lt;(\/?)(i|b|u)&gt;/g, "<$1$2>");
+}
+
+/**
+ * The progress bar, as a pointer target (mouse, Magic Remote): click to jump,
+ * drag to scrub with a time preview. Inert while the controls are hidden so a
+ * stray click on the picture never seeks.
+ */
+function Scrubber({ pos, dur, active, onSeek, onActivity }: { pos: number; dur: number; active: boolean; onSeek: (t: number) => void; onActivity: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<number | null>(null);
+  const [drag, setDrag] = useState<number | null>(null);
+  const frac = (clientX: number) => {
+    const r = ref.current?.getBoundingClientRect();
+    return r && r.width > 0 ? Math.min(1, Math.max(0, (clientX - r.left) / r.width)) : 0;
+  };
+  const shown = drag ?? (dur ? pos / dur : 0);
+  const tip = drag ?? hover;
+  return (
+    <div
+      ref={ref}
+      data-testid="scrubber"
+      role="slider"
+      aria-label="Seek"
+      aria-valuemin={0}
+      aria-valuemax={Math.round(dur)}
+      aria-valuenow={Math.round(pos)}
+      className={`group relative -my-4 py-4 ${active ? "pointer-events-auto cursor-pointer" : "pointer-events-none"}`}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => {
+        if (!dur) return;
+        e.stopPropagation();
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        setDrag(frac(e.clientX));
+        onActivity();
+      }}
+      onPointerMove={(e) => {
+        setHover(frac(e.clientX));
+        if (drag !== null) setDrag(frac(e.clientX));
+        onActivity();
+      }}
+      onPointerUp={(e) => {
+        if (drag === null) return;
+        e.stopPropagation();
+        onSeek(frac(e.clientX) * dur);
+        setDrag(null);
+      }}
+      onPointerCancel={() => setDrag(null)}
+      onPointerLeave={() => setHover(null)}
+    >
+      <div className={`relative overflow-visible rounded-full bg-white/25 transition-[height] ${hover !== null || drag !== null ? "h-3" : "h-2"}`}>
+        <div className="h-full rounded-full bg-accent" style={{ width: `${shown * 100}%` }} />
+        <div
+          className={`absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-lg transition-opacity ${hover !== null || drag !== null ? "opacity-100" : "opacity-0"}`}
+          style={{ left: `${shown * 100}%` }}
+        />
+      </div>
+      {tip !== null && dur > 0 && (
+        <div className="absolute bottom-full mb-3 -translate-x-1/2 rounded bg-black/85 px-3 py-1 text-xl tabular-nums" style={{ left: `${tip * 100}%` }} data-testid="scrub-time">
+          {fmtTime(tip * dur)}
+        </div>
+      )}
+    </div>
+  );
 }

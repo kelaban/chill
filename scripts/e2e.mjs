@@ -154,6 +154,28 @@ try {
   await press("Escape");
   await page.waitForTimeout(800);
 
+  console.log("click to scrub");
+  await page.goto(`${base}/watch/949`);
+  await page.waitForFunction(() => { const v = document.querySelector("video[data-active]"); return v && !v.paused && v.currentTime > 0.5; }, null, { timeout: 60000 });
+  await page.mouse.move(960, 540); // pointer activity shows the controls
+  const bar = await page.locator("[data-testid=scrubber]").boundingBox();
+  const durS = await page.evaluate(() => window.__chillEngine.duration());
+  await page.mouse.move(bar.x + bar.width * 0.25, bar.y + bar.height / 2);
+  const tip = await page.textContent("[data-testid=scrub-time]");
+  await page.mouse.click(bar.x + bar.width * 0.25, bar.y + bar.height / 2);
+  await page.waitForTimeout(800);
+  const clicked = await page.evaluate(() => ({ now: window.__chillEngine.now(), paused: window.__chillEngine.active.paused }));
+  check(Math.abs(clicked.now - durS * 0.25) < 2 && !clicked.paused, `click at 25% seeks to ${clicked.now.toFixed(1)} s of ${durS.toFixed(0)} (preview said ${tip}) and keeps playing`);
+  await page.mouse.move(bar.x + bar.width * 0.25, bar.y + bar.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bar.x + bar.width * 0.6, bar.y + bar.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(800);
+  const dragged = await page.evaluate(() => window.__chillEngine.now());
+  check(Math.abs(dragged - durS * 0.6) < 2, `drag to 60% scrubs to ${dragged.toFixed(1)} s`);
+  await press("Escape");
+  await page.waitForTimeout(800);
+
   console.log("resume");
   const st = await (await fetch(`${base}/api/titles/949/play?profile=1`)).json();
   check(st.phase === "ready" && st.stream.startAtS > 10, `resume point kept (${st.stream?.startAtS?.toFixed(1)} s on ${st.stream?.label})`);
