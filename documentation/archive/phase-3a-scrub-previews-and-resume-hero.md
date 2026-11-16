@@ -1,6 +1,6 @@
-# Phase 3a — Scrub previews and a Resume hero
+> Completed 2026-11-16 — scrub previews (sheets from the home copy, mapped onto any aligned copy, pointer hover/drag and remote scrubbing with one deferred seek) and the Resume hero shipped. Deviations: ffmpeg's `fps` filter needed `round=up` (the default shows each window's *last* keyframe, up to 10 s late; a real-ffmpeg test now guards it); previews announce themselves over SSE instead of waiting for the 1-minute retry; Continue Watching leaves out the hero's title; evicting a copy now keeps its neighbours aligned. TV checks are in DECISIONS D49.
 
-> **Status 2026-11-16:** in progress. Two items, built and shipped one at a time.
+# Phase 3a — Scrub previews and a Resume hero
 
 ## 1. Preview thumbnails when scrubbing
 
@@ -65,7 +65,8 @@ title, "S2 E3 · name" for episodes, how far in, **Resume** (and Start over).
 Nothing at all otherwise; the rows move up.
 
 - Server: `HomeResponse.hero` becomes the latest Continue Watching entry
-  (`{ ...summary, progress, positionS, durationS }`) or null.
+  (`{ ...summary, progress, positionS, durationS }`) or null; the Continue
+  Watching row then lists the others.
 - Web: Home renders the Resume hero when present; focus starts on Resume;
   otherwise on the first row.
 - e2e/integration: a fresh profile has no hero; after watching part of a film,
@@ -73,6 +74,6 @@ Nothing at all otherwise; the rows move up.
 
 ## Acceptance
 
-- [ ] Dragging the bar, and pressing Left/Right, shows the right picture for
-      the target time, on the fast copy and after the switch.
-- [ ] A fresh profile's Home has no hero; an unfinished film gets a Resume hero.
+- [x] Dragging the bar, and pressing Left/Right, shows the right picture for
+      the target time, on the fast copy and after the switch (e2e, demo mode; TV check: D49).
+- [x] A fresh profile's Home has no hero; an unfinished film gets a Resume hero (e2e + integration).

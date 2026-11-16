@@ -248,7 +248,7 @@ GET    /img/:size/:path              TMDB image proxy with a disk cache
   `GET /v2/files/list`, `GET /v2/files/:id/url`, `GET /v2/files/:id/hls/media.m3u8`,
   `POST|GET /v2/files/:id/mp4`, `GET /v2/files/:id/subtitles`,
   `POST /v2/files/delete`, `GET /v2/account/info` (disk quota).
-- **Scrub previews** (`services/trickplay.ts`, plan `phase-3a-…`): sheets made
+- **Scrub previews** (`services/trickplay.ts`, `archive/phase-3a-…`): sheets made
   from a home copy after it lands (`trickplay.generate`, its own lane), served at
   `/api/trickplay/:variant/NNN.jpg`; `/api/stream/:variant/trickplay` maps any
   aligned copy onto them (`alignmentBetween`). Evicting a copy keeps its

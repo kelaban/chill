@@ -1,4 +1,4 @@
-import type { HomeResponse, Row, TitleDetail, TitleSummary, WatchOn } from "@chill/shared";
+import type { HomeResponse, ResumeHero, Row, TitleDetail, TitleSummary, WatchOn } from "@chill/shared";
 import type { DiscoverParams, TmdbDetail, TmdbList, TmdbMovie } from "../adapters/types.js";
 import { normalizeTitle } from "../domain/release.js";
 import type { Ctx } from "../context.js";
@@ -170,7 +170,12 @@ export async function home(ctx: Ctx, profileId: number): Promise<HomeResponse> {
       )
       .all(profileId) as { tmdb_id: number; position_s: number; duration_s: number; show_imdb: string | null }[]
   ).filter((c, i, all) => !c.show_imdb || all.findIndex((x) => x.show_imdb === c.show_imdb) === i).slice(0, 20);
-  push("continue", "Continue Watching", summariesFromTitles(ctx, cont.map((c) => ({ tmdb_id: c.tmdb_id, progress: c.duration_s ? c.position_s / c.duration_s : 0 }))));
+  const continuing = summariesFromTitles(ctx, cont.map((c) => ({ tmdb_id: c.tmdb_id, progress: c.duration_s ? c.position_s / c.duration_s : 0 })));
+  // The hero is "pick up where you left off": the latest unfinished title, or nothing.
+  // The Continue Watching row lists the rest (the hero already says it).
+  const latest = continuing[0] ? cont.find((c) => c.tmdb_id === continuing[0]!.tmdbId) : undefined;
+  const hero: ResumeHero | null = latest ? { ...continuing[0]!, ready: ready.has(latest.tmdb_id), positionS: latest.position_s, durationS: latest.duration_s } : null;
+  push("continue", "Continue Watching", continuing.slice(1));
 
   const mine = ctx.db.prepare("SELECT tmdb_id FROM my_list WHERE profile_id = ? ORDER BY added_at DESC").all(profileId) as { tmdb_id: number }[];
   push("my-list", "My List", summariesFromTitles(ctx, mine));
@@ -222,8 +227,7 @@ export async function home(ctx: Ctx, profileId: number): Promise<HomeResponse> {
   push("now-playing", "New Releases", nowPlaying);
   genreRows.forEach((g, i) => push(`genre-${g.name.toLowerCase()}`, g.name, genreLists[i] ?? []));
 
-  const hero = trending.find((t) => t.backdropPath) ?? popular[0] ?? null;
-  return { hero: hero ? { ...hero, ready: ready.has(hero.tmdbId) } : null, rows };
+  return { hero, rows };
 }
 
 /** An episode as a title: facts from the episode and its show (no catalog call). */

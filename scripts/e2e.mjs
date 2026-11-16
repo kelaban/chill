@@ -70,11 +70,9 @@ try {
   await page.waitForSelector("[data-testid=profile-1]");
   await page.waitForFunction(() => document.querySelector("[data-focused=true]"));
   await press("Enter");
-  await page.waitForSelector("[data-testid=hero-play]");
-  await page.waitForFunction(() => document.querySelector("[data-focused=true]")?.getAttribute("data-testid") === "hero-play");
-  check((await focused()) === "hero-play", "home opens with Play focused");
-  await press("ArrowDown");
-  check((await focused())?.startsWith("card-"), "Down moves into the first row");
+  await page.waitForFunction(() => document.querySelector("[data-focused=true]")?.getAttribute("data-testid")?.startsWith("card-"));
+  check(!(await page.$("[data-testid=hero]")), "nothing to resume yet: no hero");
+  check((await focused())?.startsWith("card-"), "home opens with the first row focused");
   await press("ArrowRight", 2);
   const card = await focused();
   check(card?.startsWith("card-"), `Right moves along the row (${card})`);
@@ -82,7 +80,7 @@ try {
   await page.waitForSelector("[data-testid=detail-title]");
   check(true, "OK opens the detail page");
   await page.keyboard.down("Escape"), await page.keyboard.up("Escape");
-  await page.waitForSelector("[data-testid=hero]");
+  await page.waitForSelector("[data-row]");
   check(true, "Back returns home");
   await page.screenshot({ path: path.join(out, "home.png") });
 
@@ -248,6 +246,22 @@ try {
   console.log("resume");
   const st = await (await fetch(`${base}/api/titles/949/play?profile=1`)).json();
   check(st.phase === "ready" && st.stream.startAtS > 10, `resume point kept (${st.stream?.startAtS?.toFixed(1)} s on ${st.stream?.label})`);
+  console.log("Resume hero");
+  const homeNow = await (await fetch(`${base}/api/home?profile=1`)).json();
+  await page.goto(`${base}/`);
+  if (homeNow.hero) {
+    await page.waitForFunction(() => document.querySelector("[data-focused=true]")?.getAttribute("data-testid") === "hero-play", null, { timeout: 10000 }).catch(() => null);
+    const heroTitle = await page.textContent("[data-testid=hero-title]").catch(() => null);
+    check(heroTitle === homeNow.hero.title && (await focused()) === "hero-play", `Home leads with ${heroTitle}, Resume focused (${await page.textContent("[data-testid=hero-left]").catch(() => "")})`);
+    await page.screenshot({ path: path.join(out, "home-resume.png") });
+    await press("Enter");
+    await page.waitForFunction(() => { const v = document.querySelector("video[data-active]"); return v && v.currentTime > 0.2; }, null, { timeout: 60000 });
+    const resumedAt = await page.evaluate(() => window.__chillEngine.now());
+    check(resumedAt > homeNow.hero.positionS - 10, `Resume continues from ${homeNow.hero.positionS.toFixed(0)} s (now ${resumedAt.toFixed(1)} s)`);
+    await press("Escape");
+    await page.waitForTimeout(800);
+  } else check(false, "something is unfinished by now, so Home should have a Resume hero");
+
   check(errors.length === 0, `no page errors${errors.length ? `: ${errors.join("; ")}` : ""}`);
   await browser.close();
 } catch (err) {

@@ -69,8 +69,14 @@ export interface Row {
 }
 
 export interface HomeResponse {
-  hero: TitleSummary | null;
+  /** The profile's latest unfinished title, to pick up where it left off; null when there's none. */
+  hero: ResumeHero | null;
   rows: Row[];
+}
+
+export interface ResumeHero extends TitleSummary {
+  positionS: number;
+  durationS: number;
 }
 
 export interface Person {

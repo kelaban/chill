@@ -11,7 +11,7 @@ real on the TV.
 | 0 | Spikes & decisions | `plans/phase-0-spikes.md` | Waiting on keys + TV |
 | 1 | Walking skeleton: browse → Play from put.io on the TV | `plans/phase-1-walking-skeleton.md` | Built; TV acceptance pending |
 | 2 | Quality ladder, local tier & storage manager | `plans/phase-2-quality-ladder-and-storage.md` | Built; TV acceptance pending |
-| 3 | Netflix polish & personalization | to write | — |
+| 3 | Netflix polish & personalization | `archive/phase-3a-scrub-previews-and-resume-hero.md` (3a) | Taste rows, where-it-streams, scrub previews, Resume hero built; rest to plan |
 | 4 | Playback robustness (remux, audio, subtitles) | `plans/phase-4-subtitles.md` (4a) | Compat remux + subtitles built; TV check pending |
 | 5 | Phone & Google Cast | to write | — |
 | 6 | TV shows | `plans/phase-6-tv-shows.md` | Built; real-data + TV check pending |
@@ -46,7 +46,7 @@ action, put.io usage stays < 100 GB and local < 100 GB through a 20-movie soak t
 
 ## Phase 3 — Netflix polish & personalization
 
-Hero banner with backdrop motion, OMDb ratings (IMDb / RT / Metacritic), full
+Resume hero in place of a promo banner (built, `archive/phase-3a-…`), OMDb ratings (IMDb / RT / Metacritic), full
 Browse page (genre, year, rating, runtime, language filters, infinite grid),
 "Because you watched…" (built: TMDB recommendations, two rows, genre rows by taste — D48), "New on digital", My List with background prefetch,
 availability badges, trailers on detail, profile avatars, TMDB attribution,

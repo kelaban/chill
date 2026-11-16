@@ -76,7 +76,7 @@ afterAll(() => {
 describe("catalog", () => {
   it("serves home rows, search and detail", async () => {
     const home = await api<{ hero: unknown; rows: { id: string; items: unknown[] }[] }>("GET", "/api/home");
-    expect(home.hero).toBeTruthy();
+    expect(home.hero).toBeNull(); // nothing to resume yet: no hero
     expect(home.rows.map((r) => r.id)).toEqual(expect.arrayContaining(["trending", "popular", "top-rated"]));
     const s = await api<{ tmdbId: number }[]>("GET", "/api/search?q=heat");
     expect(s[0]?.tmdbId).toBe(HEAT);
@@ -387,6 +387,28 @@ describe("where a film streams", () => {
   });
 });
 
+describe("the Resume hero", () => {
+  type H = { hero: { tmdbId: number; title: string; positionS: number; durationS: number; progress: number } | null };
+  it("is empty until something is unfinished, then leads with the latest; finishing it clears it", async () => {
+    const p = await api<{ id: number }>("POST", "/api/profiles", { name: "Resumer" });
+    expect((await api<H>("GET", `/api/home?profile=${p.id}`)).hero).toBeNull();
+    const at = (tmdbId: number, positionS: number, event = "stop") => api("POST", "/api/progress", { profileId: p.id, tmdbId, variantId: "none", positionS, durationS: 6000, event });
+    for (const id of [603, 157336]) await api("GET", `/api/titles/${id}?profile=${p.id}`); // opened before played, as in the app
+    await at(603, 1200); // The Matrix, 20 min in
+    await advance(1000);
+    await at(157336, 2400); // Interstellar, 40 min in — the latest
+    const h = (await api<H>("GET", `/api/home?profile=${p.id}`)).hero!;
+    expect(h).toMatchObject({ tmdbId: 157336, title: "Interstellar", positionS: 2400, durationS: 6000 });
+    expect(h.progress).toBeCloseTo(0.4, 3);
+    // Continue Watching holds the rest, not the hero again.
+    const rows = (await api<{ rows: { id: string; items: { tmdbId: number }[] }[] }>("GET", `/api/home?profile=${p.id}`)).rows;
+    expect(rows.find((r) => r.id === "continue")?.items.map((i) => i.tmdbId)).toEqual([603]);
+    await advance(1000);
+    await at(157336, 6000, "end"); // finished
+    expect((await api<H>("GET", `/api/home?profile=${p.id}`)).hero?.tmdbId).toBe(603);
+  });
+});
+
 describe("home rows follow what a profile watches", () => {
   type Home = { rows: { id: string; title: string; items: { tmdbId: number }[] }[] };
   it("Horror rises to the first genre row, and 'Because you watched' skips what was seen", async () => {
@@ -461,9 +483,9 @@ describe("TV shows", () => {
     const [e1, e2] = await api<Ep[]>("GET", `/api/shows/${ST}/seasons/1`);
     const v = ctx.db.prepare("SELECT id FROM variants WHERE tmdb_id = ? ORDER BY location = 'local' DESC").pluck().get(e1!.tmdbId) as string;
     await api("POST", "/api/progress", { profileId: 1, tmdbId: e1!.tmdbId, variantId: v, positionS: 60, durationS: 180, event: "stop" });
-    const home = await api<{ rows: { id: string; items: { tmdbId: number; kind?: string; subtitle?: string }[] }[] }>("GET", "/api/home");
-    const cont = home.rows.find((r) => r.id === "continue")!.items.find((i) => i.kind === "episode");
-    expect(cont).toMatchObject({ tmdbId: e1!.tmdbId, subtitle: "S1 E1 · Chapter 11" });
+    const home = await api<{ hero: { tmdbId: number; kind?: string; subtitle?: string; positionS: number } | null }>("GET", "/api/home");
+    // The latest unfinished thing leads Home as the Resume hero.
+    expect(home.hero).toMatchObject({ tmdbId: e1!.tmdbId, kind: "episode", subtitle: "S1 E1 · Chapter 11", positionS: 60 });
     expect((await api<Show>("GET", `/api/shows/${ST}`)).next).toMatchObject({ tmdbId: e1!.tmdbId, resume: true });
 
     await api("POST", "/api/progress", { profileId: 1, tmdbId: e1!.tmdbId, variantId: v, positionS: 179, durationS: 180, event: "end" });
