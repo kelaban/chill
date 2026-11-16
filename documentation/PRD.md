@@ -31,7 +31,7 @@ home server is managed automatically; your place in every movie is not.
 | G2 | **Uses chill.institute** (or a similar aggregator) for releases | Release search goes through the chill.institute v4 API behind an `Indexer` interface; a Torznab/Prowlarr adapter can be added without touching callers. |
 | G3 | **Downloads via put.io** | Every acquisition is a put.io transfer into a dedicated `chill/` folder. |
 | G4 | **Beautiful Netflix-like UI over the full universe** | Home rows, hero, genre browse, filters, ratings, and a search box that queries all of TMDB — owned or not. Selecting a result kicks off release search in the background. |
-| G5 | **Quick and storage-efficient** | Popular titles go from Play to first frame in **≤ 60 s (p50)**. A higher-quality copy upgrades in the background. Total usage never exceeds **100 GB on put.io** or **100 GB local**. Resume position survives eviction. |
+| G5 | **Quick and storage-efficient** | Popular titles go from Play to first frame in **≤ 60 s (p50)**. A higher-quality copy upgrades in the background and swaps in seamlessly mid-playback. Total usage never exceeds **100 GB on put.io** or **100 GB local**. Resume position survives eviction. |
 
 ## Users
 
@@ -49,9 +49,9 @@ has their own Continue Watching and My List. No public sign-up, ever.
 3. **Play now.** I press Play on something I've never downloaded. A preparing
    screen shows *Finding releases → Sending to put.io → Downloading 64% → Starting*.
    It plays from put.io the moment a watchable file exists.
-4. **Quietly better.** An hour later, the 4K HDR copy has finished and been copied
-   home. Next time I press Play (or right away, if I accept the toast mid-movie)
-   I get the 4K copy, at the same spot.
+4. **Quietly better.** Partway through the movie, the 4K HDR copy finishes and is
+   copied home. Playback switches over to it **seamlessly** — no prompt, no jump,
+   no rebuffer. I just notice it looks better.
 5. **Resume anything.** I stopped a movie three weeks ago and its files have since
    been evicted. I press Resume; chill re-acquires it and seeks to where I left off.
 6. **My List = pre-fetched.** Adding a movie to My List downloads it in the
@@ -63,12 +63,20 @@ has their own Continue Watching and My List. No public sign-up, ever.
 
 - **Two quality tiers per title:**
   - **Instant** — the release most likely to finish on put.io fastest
-    (high seeders, 1080p, ~2–8 GB, codecs the TV plays). Streamed straight from
+    (high seeders, ~2–8 GB, codecs the TV plays — never DTS — and, where a healthy
+    one exists, the same dynamic range as the target so the later switch is invisible). Streamed straight from
     put.io; never needs local disk.
   - **Target** — the household's preferred quality (default: 2160p HDR WEB-DL
     ≤ 25 GB, else 1080p x265 BluRay ≤ 12 GB). Downloaded to put.io, mirrored to the
     home server, played locally.
   - If the instant pick already meets Target, there is only one acquisition.
+- **Upgrades are seamless and automatic.** When a better copy is ready, the
+  player switches to it in place, with no prompt: aligned to the same frame,
+  on a scene cut, with no visible gap. The one thing software can't hide is the
+  TV changing picture mode (SDR → HDR) — the panel itself blanks for a moment.
+  So the instant pick prefers the same dynamic range as the target. If they still
+  differ, the switch waits for the next natural break (pause, seek, or resume).
+  See `ARCHITECTURE.md` → *Seamless upgrade*.
 - **put.io is a staging tier, local is the library tier.** Once a file is safely
   mirrored home, its put.io copy is deleted to keep put.io free for new transfers.
 - **Budgets with watermarks.** Each tier has a 100 GB budget; eviction starts at
@@ -85,7 +93,7 @@ a 20 GB file takes ~5 min at 500 Mbps, ~27 min at 100 Mbps.
 
 - TV shows (chill.institute supports them; planned for a later phase).
 - Live TV, music, photos.
-- Offline downloads to phones.
+- Offline downloads to phones; watching outside the home.
 - Public hosting, sharing outside the household, multi-household.
 - Video transcoding on the home server (we remux/re-encode audio at most; put.io's
   HLS is the universal fallback).
@@ -105,12 +113,12 @@ a 20 GB file takes ~5 min at 500 Mbps, ~27 min at 100 Mbps.
 
 - One Docker container (plus optional sidecars) on the home server; no cloud
   backend required.
-- LAN-first. Remote access, if wanted, goes through Tailscale — never a port
-  opened to the internet.
+- **LAN-only.** No watching outside the home; nothing is exposed to the internet.
 - Secrets (TMDB, OMDb, chill, put.io tokens) live only on the server. Signed
   put.io URLs are never logged.
-- The TV's browser engine is old (webOS 6 ≈ Chromium 79 → webOS 24 ≈ Chromium 108),
-  so the client targets that, not evergreen browsers.
+- **The TV is an LG OLED G5 (2025)**: webOS 25, Chromium 120 web engine (webOS 26,
+  Chromium 132, is rolling out to it). HEVC, AV1, Dolby Vision, HDR10, Dolby Atmos;
+  **Google Cast built in**; **no DTS** — LG dropped DTS from the whole 2025 line-up.
 
 ## Success metrics
 
@@ -119,12 +127,18 @@ a 20 GB file takes ~5 min at 500 Mbps, ~27 min at 100 Mbps.
 - Zero manual storage cleanups needed in a typical month.
 - Household stops opening chill.institute / Plex directly.
 
+## Decisions so far
+
+| Question | Answer (2026-11-16) | Consequence |
+|---|---|---|
+| TV | LG OLED G5 (2025), webOS 25 | Build for Chromium 120; Tailwind v4 is fine; no legacy polyfills. |
+| Chromecast? | Built into the TV | Phone → TV casting needs no extra device; it's also the fallback if Developer Mode sideloading breaks. |
+| Home downlink | "Good enough" | Mirroring speed isn't a design constraint. |
+| Watch outside the home? | No | LAN-only; no Tailscale, no remote access phase. |
+| Upgrade UX | Seamless, no prompt | Phase 2 builds a frame-aligned in-place handoff. |
+
 ## Open questions (answer in Phase 0)
 
-1. TV model/year and webOS version? (Decides Chromium target, HEVC/DV/DTS support.)
-2. Is there a Chromecast / Google TV device, and which?
-3. Home server: OS, CPU (Intel QuickSync?), always-on, Docker available?
-4. Home downlink speed? (Sets how long local mirroring takes.)
-5. Keep Plex running alongside on the same library? (Default: yes.)
-6. Audio/subtitle language preferences?
-7. Is watching outside the home needed? (Decides Tailscale in Phase 5.)
+1. Home server: OS, CPU (Intel QuickSync?), always on, Docker available?
+2. Keep Plex running alongside on the same library? (Default: yes.)
+3. Audio/subtitle language preferences? (Default: English audio, no subtitles.)

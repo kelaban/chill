@@ -70,10 +70,40 @@ Pure fn `selectVariant(variants, device, context)`:
 3. `GET /api/stream/:variantId` for local variants range-serves the file (`206`,
    `Accept-Ranges`, correct `Content-Type`; tested with the TV's `<video>`).
 
-**Mid-playback upgrade:** when a better variant becomes ready for the title that's
-playing, the server emits `upgrade.available` on SSE. The player shows a toast
-"4K HDR is ready — Switch" for 15 s. Accept → note `currentTime`, swap `src`,
-seek, resume. Ignore → the next Play uses it. Never switch without consent.
+## 4a. Seamless mid-playback upgrade (no prompt)
+
+Design is in `ARCHITECTURE.md` → *Seamless upgrade*; the handoff mode
+(two-element / black-segment / natural-break-only) comes from Phase 0 S1 step 4.
+
+Server:
+
+1. On a better variant becoming ready for a title with a playback heartbeat in
+   the last 2 min, enqueue `upgrade.align(from=playing, to=new)`.
+2. `upgrade.align`: ffmpeg extracts 60 s mono 8 kHz PCM at 10/50/90% from both
+   (put.io copy via a fresh URL and range reads) → `domain/align.ts`
+   `crossCorrelate` (FFT) per anchor → `fitLinear` → store `variant_alignments`.
+   Residual > 40 ms or anchors disagreeing → mark `aligned = false`.
+3. `upgrade.cuts`: ffmpeg `scdet` + `blackdetect` over
+   `[map(playhead), map(playhead) + 5 min]` on the new file → cut list in the new
+   file's timeline. Re-run when the playhead passes 3 min into the window.
+4. Emit `upgrade.ready { fromVariantId, toVariantId, a, b, cuts[], mode }` on SSE,
+   where `mode` is `seamless`, `black-segment`, or `natural-break` (no alignment,
+   dynamic range differs, or the TV can't do two decoders and no black segment).
+
+Client (`web/src/player/handoff.ts`):
+
+- `seamless`: next cut ≥ 15 s ahead → hidden muted second `<video>` → seek to
+  `map(c)` → wait for ≥ 10 s buffered → on the playing element's
+  `requestVideoFrameCallback` frame where `mediaTime ≥ c`, play + show the new
+  element, 120 ms audio ramp, release the old one. Abort quietly (and retry at the
+  next cut) if the viewer seeks or pauses during the setup.
+- `black-segment`: same idea with one element, swapping `src` inside a black
+  segment longer than the measured swap latency.
+- `natural-break`: swap on the next pause, seek, or resume.
+- Report `{ mode, gapMs, droppedFrames }` to `/api/telemetry`; the Storage screen
+  shows the last handoff for debugging.
+- From then on, progress reports reference the new variant, and the old variant's
+  "currently playing" protection lifts so eviction can take it.
 
 ## 5. Storage manager
 
@@ -124,6 +154,15 @@ with speed and ETA. A line explaining any job waiting for space.
 - `storage.test.ts`: table-driven — every class in order, every never-evict rule,
   watermark math, `needBytes`, ties.
 - `selectVariant.test.ts`: local vs put.io, tier order, position mapping.
+- `align.test.ts`: synthetic signals with known offset and drift (recover offset
+  ± 5 ms, slope ± 0.0005); a different-cut pair is rejected.
+- **Handoff e2e (Playwright, headless Chromium):** two ffmpeg-generated clips of
+  the same `testsrc2` source with a burned-in frame counter and a chirp track —
+  B at a different resolution with 2.5 s of extra lead-in and a cut every 20 s.
+  Assert alignment finds 2.5 s, the switch lands on a cut, and the frame counter
+  read via `requestVideoFrameCallback` never skips or repeats more than one frame.
+- **Real-film alignment:** *Tears of Steel* (open movie, CC-BY) 1080p vs 4K
+  masters, fetched in CI and cached.
 - Mirror job with a fake aria2 RPC and a fixture file: verify fail → retry, verify
   pass → rename + supersede.
 - **Soak test** (`npm run soak`, not in CI): simulate 20 titles of realistic sizes
@@ -135,7 +174,11 @@ with speed and ETA. A line explaining any job waiting for space.
 
 - [ ] Cold Play starts from put.io (instant), and within the expected download time
       a local 4K copy appears with correct naming; Plex sees it if it's running.
-- [ ] Accepting the upgrade toast mid-movie switches within 5 s at the same spot.
+- [ ] Mid-movie, with no prompt, playback switches to the 4K copy on a scene cut;
+      on the TV, a viewer who wasn't told can't point to the moment (same dynamic
+      range), and telemetry reports a gap of ≤ 1 frame.
+- [ ] When dynamic range differs, the switch waits for the next pause/seek and
+      resumes at the same frame.
 - [ ] After the local copy verifies, both put.io copies are gone.
 - [ ] Soak test passes; manual 20-movie week stays within both budgets.
 - [ ] Deleting a watched, evicted title's files and pressing Resume re-acquires and

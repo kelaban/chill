@@ -36,14 +36,14 @@
 │  │ api + SSE    → /api/*, /api/events; serves the built SPA            │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │  volumes: /data/db (SQLite)  /data/library (≤100 GB)  /data/cache         │
-│  optional: Plex/Jellyfin reading /data/library;  Tailscale sidecar      │
+│  optional: Plex/Jellyfin reading /data/library        (LAN-only)        │
 └────────────────────────────▲────────────────────────────────────────────┘
                              │ LAN (HTTP)
         ┌────────────────────┼──────────────────────┐
         │                    │                      │
-  LG webOS TV          Phone / laptop           Chromecast
-  hosted-app shell →   same SPA as a PWA;       Default Media Receiver
-  loads SPA from       browse + cast sender     (custom receiver later)
+  LG OLED G5 (webOS 25)    Phone / laptop        Google Cast (built
+  hosted-app shell →       same SPA as a PWA;    into the same TV)
+  loads SPA from           browse + cast sender  Default Media Receiver
   server (/tv)
 ```
 
@@ -68,14 +68,15 @@
 | Server | Node 22 LTS + Hono (`@hono/node-server`) | Long-running process with disk I/O, child processes (aria2c, ffmpeg), and a worker loop — not a fit for Workers. Hono keeps the COOK muscle memory. |
 | DB | SQLite (`better-sqlite3`) + plain SQL migrations | One file, backs up with `cp`, enough for a household. |
 | Jobs | SQLite `jobs` table + one in-process worker | Durable across restarts, no Redis. |
-| Live status | Server-Sent Events | Works on old Chromium, simpler than WebSockets. |
+| Live status | Server-Sent Events | Simpler than WebSockets; one-way is all we need. |
 | Downloads | `aria2c` (multi-connection, resumable) via JSON-RPC | Saturates the home link; restarts cleanly. |
 | Media tools | `ffprobe` always; `ffmpeg` for remux/audio only | Know exactly what each file is; never video-transcode. |
 | Client | React 18 + Vite + TanStack Query + React Router | |
-| Styling | **Tailwind v3** (not v4) | v4 needs Chromium ≥ 111; webOS ships 79–108. |
+| Styling | Tailwind v4 | Needs Chromium ≥ 111; the G5's webOS 25 ships Chromium 120. |
 | TV focus | `@noriginmedia/norigin-spatial-navigation` | D-pad focus management; Magic Remote pointer works natively. |
 | Video | `<video>` + native HLS on webOS; `hls.js` elsewhere | webOS's media pipeline handles HLS and HEVC in hardware. |
-| Build target | `@vitejs/plugin-legacy`, target set from Phase 0's webOS version | |
+| Build target | Vite `build.target: "chrome120"` | webOS 25. No legacy plugin; CI fails if the output needs anything newer. |
+| Seamless switch | Two `<video>` elements + `requestVideoFrameCallback`; ffmpeg audio cross-correlation + `scdet` on the server | See *Seamless upgrade*. |
 | Tests | Vitest; MSW fixtures for TMDB/chill/put.io | |
 | Deploy | GitHub Actions → GHCR image → `docker compose pull && up -d` on the server | |
 
@@ -94,6 +95,7 @@ acquisitions  (id, tmdb_id, tier [instant|target], release_id, state, putio_tran
 variants      (id, tmdb_id, location [putio|local], putio_file_id, local_path, size_bytes,
                resolution, hdr, video_codec, audio_codec, container, duration_s,
                probe_json, tier, superseded_by, pinned, last_played_at, created_at)
+variant_alignments (from_id, to_id, a, b, residual_ms, created_at)   -- t_to = a·t_from + b
 jobs          (id, type, payload_json, state, attempts, run_after, last_error, created_at)
 settings      (key PK, value_json)
 ```
@@ -126,9 +128,50 @@ file path — only `last_variant_id` as a hint.
    `library/.partial/`, verifies size + `ffprobe`, atomically renames to
    `library/Movies/<Title> (<Year>)/<Title> (<Year>) - <res>.<ext>`.
 2. New local variant; older variants get `superseded_by`. Both put.io copies become
-   eviction candidates (first in line).
-3. If the title is playing, SSE tells the client; it offers "4K is ready — switch?"
-   and on accept swaps `src` and seeks to the same position.
+   eviction candidates (first in line) — but never while still playing.
+3. If the title is playing, the server prepares a **seamless upgrade** (below) and
+   pushes it to the player over SSE. No prompt; the player switches on its own.
+
+### Seamless upgrade
+
+The goal: the viewer can't tell the moment it happened, other than the picture
+getting better. Three problems, three mechanisms.
+
+**1. The two files don't share a timeline.** Different releases of the same cut
+can be offset by seconds (logos, intros) and drift (23.976 vs 24 fps). Job
+`align(from, to)` extracts ~60 s of mono 8 kHz audio at three anchors (10%, 50%,
+90%) from both files with ffmpeg — the put.io copy over HTTP range requests — and
+cross-correlates them (pure function `crossCorrelate(pcmA, pcmB) → offsetMs`).
+It fits `t_to = a·t_from + b`. If the anchors disagree or the residual is
+> 40 ms, they're different cuts: no seamless switch for this pair (fall back to
+the next natural break with proportional mapping). Result is stored in
+`variant_alignments(from_id, to_id, a, b, residual_ms)`.
+
+**2. Any switch must happen somewhere it can't be seen.** The server runs ffmpeg
+`scdet` (scene-change) and `blackdetect` on the *target* file over the next ~5 min
+past the playhead and sends cut points, refreshed as playback moves. The switch
+always lands exactly on a cut.
+
+**3. The new file must be ready before the old one lets go.** On the client:
+
+1. Pick the next cut `c` ≥ 15 s ahead (in the playing file's timeline).
+2. Load the new source into a second, hidden, muted `<video>`; seek it to
+   `map(c)`; wait until it has buffered ≥ 10 s and is paused on that frame.
+3. Watch the playing element with `requestVideoFrameCallback`. On the frame where
+   `mediaTime` reaches `c`: `play()` the new element, show it, ramp audio across
+   over ~120 ms, then stop and release the old element.
+4. Log the measured gap (last old frame → first new frame) for the success metric.
+
+**Fallbacks**, chosen from Phase 0's measurements:
+
+- If the TV can't run two decoders at once (one being 4K HEVC): single-element
+  swap at a **black segment** at least as long as the measured swap latency;
+  if none appears in the next 10 min, at the next natural break.
+- If the dynamic range differs (SDR ↔ HDR10 ↔ Dolby Vision): the TV panel
+  changes picture mode and blanks for a moment, which no software hides. Switch
+  only at the next natural break (pause, seek, resume). The ranker prefers an
+  instant pick with the target's dynamic range to make this case rare.
+- If alignment failed: next natural break, proportional position mapping.
 
 ### Resume after eviction
 
@@ -186,8 +229,14 @@ The webOS app is a **hosted-app shell**: a tiny IPK whose `index.html` redirects
 never changes. It's sideloaded with Developer Mode (`ares-cli` or webOS Dev
 Manager). Developer Mode sessions expire (community reports ~1000 h) and remove
 sideloaded apps, so we automate renewal (Phase 1) and consider Homebrew Channel
-if the firmware allows. Fallbacks if sideloading fails: the TV's browser, casting
-from a phone, or Plex/Jellyfin on the same library.
+if the firmware allows. Fallbacks if sideloading fails: **Google Cast**, built into
+the G5 (phone browses, TV plays), the TV's browser, or Plex/Jellyfin on the same
+library.
+
+The TV is an LG OLED G5: webOS 25 / Chromium 120 (webOS 26 / Chromium 132
+rolling out). It decodes HEVC, AV1, Dolby Vision and HDR10 in hardware and has
+**no DTS** support, so the ranker treats DTS audio as unplayable until Phase 4 can
+re-encode it.
 
 ### Decision gate (end of Phase 0)
 

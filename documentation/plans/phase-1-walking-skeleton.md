@@ -3,7 +3,8 @@
 **Goal:** on the TV, browse the whole movie universe, press Play on something never
 downloaded, and be watching from put.io in ≤ 60 s. Stop; relaunch; resume.
 
-**Depends on:** Phase 0 decisions (Chromium target, stream delivery, race timeout).
+**Depends on:** Phase 0 decisions (stream delivery, race timeout). The build target
+is already known: Chromium 120 (LG G5, webOS 25).
 
 **Out of scope here:** local tier, target quality, eviction (Phase 2); OMDb,
 Browse filters, prefetch (Phase 3); remux/subtitles (Phase 4).
@@ -83,6 +84,12 @@ rank(title: TitleFacts, releases: Release[], profile: QualityProfile,
 - Not CAM/TS/TC/SCR/HDCAM/TELESYNC; not 3D; not hardcoded subs; not a sample.
 - `seeders ≥ 2`; `size` within `[300 MB, profile.maxSizeTarget]`.
 - Language: English or untagged/multi, unless the profile says otherwise.
+- Audio the TV can't decode: any DTS variant (the G5 has no DTS). Lifted for the
+  target tier once Phase 4 can re-encode audio.
+
+**Soft preference, both tiers:** the target profile's dynamic range (SDR / HDR10 /
+DV). An instant pick that matches it makes the Phase 2 upgrade invisible; it's
+weighted below seeders so it never makes Play slower.
 
 **Instant score** — prefers what will *finish fast* and *play anywhere*:
 `w1·log2(1+seeders) + w2·sizeFit(size, 2–8 GB) + w3·resolution(1080p>720p>2160p)
@@ -136,8 +143,8 @@ Phase 1 uses only `instant`; `target` is computed and stored for Phase 2.
 
 ## 7. Web client (10-foot first)
 
-- Vite + React 18 + React Router + TanStack Query + Tailwind v3 +
-  `@vitejs/plugin-legacy` targeting Phase 0's Chromium.
+- Vite (`build.target: "chrome120"`) + React 18 + React Router + TanStack Query +
+  Tailwind v4.
 - 1920×1080 design canvas scaled to the viewport; safe-area padding 5%.
 - `@noriginmedia/norigin-spatial-navigation` for D-pad focus; focused card scales
   to 1.08 with a CSS transform (no layout shift, no `backdrop-filter`).

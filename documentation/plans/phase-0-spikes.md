@@ -8,8 +8,9 @@ only the decision record below survives.
 
 ## S1. The TV: what can it actually play?
 
-1. Record the TV's model, year, webOS version (Settings → General → About), and
-   from that the Chromium version of its web engine.
+1. Known: LG OLED G5 (2025), webOS 25 → Chromium 120. Confirm the exact model
+   number and current webOS version (Settings → General → About); note if the
+   webOS 26 update (Chromium 132) has landed.
 2. Enable **Developer Mode** (LG Developer Mode app; needs an LG developer
    account). Install `@webos-tools/cli` (`ares-*`) or webOS Dev Manager on a laptop.
 3. Build a hello-world **hosted app** IPK (`webos/` layout from the Phase 1 plan)
@@ -27,19 +28,29 @@ only the decision record below survives.
    | 4 | MP4 (fMP4) | HEVC 10-bit HDR10 | E-AC3 | what a remux would produce |
    | 5 | MKV | HEVC DV profile 8 | E-AC3 Atmos | |
    | 6 | MKV | HEVC DV profile 5 | E-AC3 | some WEB-DLs |
-   | 7 | MKV | HEVC | DTS / DTS-HD MA | often unsupported on newer LGs |
+   | 7 | MKV | HEVC | DTS / DTS-HD MA | expected to fail: LG dropped DTS in 2025 |
    | 8 | MKV | HEVC | TrueHD | |
    | 9 | HLS (fMP4 segments) | HEVC | E-AC3 | our remux path |
    | 10 | put.io HLS of a real file | (put.io's transcode) | | universal fallback |
    | 11 | MKV with PGS / SRT subs | | | subtitle handling |
 
-4. Check remote key codes in the harness: Back (461), Play/Pause (415/19), FF/RW
+4. **Seamless-switch prerequisites** (these decide Phase 2's handoff design):
+   - **Two decoders at once?** Play #3 (4K HEVC) in one `<video>` while #1
+     (1080p H.264) plays in a second; then #3 alongside a second 4K HEVC. Record
+     whether both decode, stutter, or one errors.
+   - **Handoff gap.** With two elements: prebuffer B paused, then on A's
+     `requestVideoFrameCallback` start B and swap visibility; measure the gap in
+     frames. With one element: time from `src` change + seek to first frame.
+   - **Picture-mode changes.** Switch SDR → HDR10 → Dolby Vision between elements
+     and record whether (and how long) the panel blanks.
+   - `requestVideoFrameCallback` present and reporting `mediaTime`.
+5. Check remote key codes in the harness: Back (461), Play/Pause (415/19), FF/RW
    (417/412), color keys, and that the Magic Remote pointer focuses elements.
-5. Note how long Developer Mode says the session lasts and whether the renewal can
+6. Note how long Developer Mode says the session lasts and whether the renewal can
    be scripted (`ares-*` / the dev-mode session-token endpoint). Check if the
    firmware allows Homebrew Channel.
 
-**Output:** the table filled in; Chromium version; renewal approach.
+**Output:** the table filled in; seamless-switch measurements; renewal approach.
 
 ## S2. chill.institute: is ranking good enough?
 
@@ -67,20 +78,23 @@ only the decision record below survives.
 ## S4. Home server
 
 Record OS, CPU (and iGPU / QuickSync), RAM, free disk for `/data/library`,
-Docker + Compose versions, whether it's always on, LAN IP / hostname, and the home
-internet downlink (speed test). Check that the TV can reach the server by IP (and
-whether it resolves `.local` names — usually not).
+Docker + Compose versions, whether it's always on, and LAN IP / hostname. Check
+that the TV can reach the server by IP (and whether it resolves `.local` names —
+usually not). Measure ffmpeg `scdet` speed on a 4K HEVC file (how many minutes of
+cut points per second of CPU) — it bounds how early Phase 2 can plan a switch.
 
-## S5. Chromecast (if one exists)
+## S5. Google Cast (built into the TV)
 
-Model, and whether the Default Media Receiver plays sample #1 and #3 from a LAN
-URL with CORS headers.
+From a phone, cast samples #1 and #3 from a LAN URL to the TV's Default Media
+Receiver (CORS headers set). Confirm whether the phone's browser requires HTTPS
+for the Cast sender on the LAN, and if so plan local TLS for Phase 5.
 
 ## Decision record (fill in, then archive this plan)
 
 | Decision | Options | Chosen | Evidence |
 |---|---|---|---|
-| Chromium build target | per S1 | | |
+| Chromium build target | chrome120 (webOS 25) | chrome120 | LG web-engine table |
+| Seamless handoff | two-element / single-element at black segment / natural break only | | S1 step 4 |
 | Local playback engine | own (direct + remux) / Jellyfin | | S1 rows 3, 4, 9 |
 | Default target profile | 2160p HDR WEB-DL ≤ 25 GB / 1080p x265 ≤ 12 GB | | S1, S4 disk |
 | DV allowed? which profiles | | | S1 rows 5, 6 |
@@ -88,7 +102,7 @@ URL with CORS headers.
 | Instant stream delivery | original URL / HLS / MP4 conversion | | S3 |
 | Race timeout | default 90 s | | S3 |
 | Dev Mode renewal | script / Homebrew / manual | | S1 |
-| Cast in scope for Phase 5? | | | S5 |
+| Cast sender needs local HTTPS? | | | S5 |
 
 ## Done when
 

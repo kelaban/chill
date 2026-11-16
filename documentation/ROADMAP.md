@@ -13,17 +13,18 @@ real on the TV.
 | 2 | Quality ladder, local tier & storage manager | `plans/phase-2-quality-ladder-and-storage.md` | Ready |
 | 3 | Netflix polish & personalization | to write | — |
 | 4 | Playback robustness (remux, audio, subtitles) | to write | — |
-| 5 | Phone, Chromecast & remote access | to write | — |
+| 5 | Phone & Google Cast | to write | — |
 | 6 | TV shows | to write | — |
 
 ---
 
 ## Phase 0 — Spikes & decisions (1–2 days)
 
-Answer the PRD's open questions with experiments, not guesses: the TV's codec
-matrix, put.io time-to-ready, chill.institute ranking quality, home server specs.
+Answer the PRD's open questions with experiments, not guesses: the G5's codec
+matrix and seamless-switch limits (two decoders? picture-mode blanking?), put.io
+time-to-ready, chill.institute ranking quality, home server specs.
 **Exit:** a decision record in the Phase 0 plan, including the Jellyfin decision
-gate and the Chromium build target.
+gate and the seamless handoff mode.
 
 ## Phase 1 — Walking skeleton (MVP; replaces the current workflow)
 
@@ -37,9 +38,9 @@ stop, relaunch the app, resume at the same spot.
 ## Phase 2 — Quality ladder, local tier & storage
 
 Target tier, parallel acquisition, race-the-runner-up, put.io → local mirror
-(aria2c), local range serving, Plex-compatible naming, source upgrade with a
-mid-playback switch, both storage budgets with eviction + admission control,
-resume after eviction, Storage screen.
+(aria2c), local range serving, Plex-compatible naming, **seamless** mid-playback
+upgrade (audio-aligned, switched on a scene cut, no prompt), both storage budgets
+with eviction + admission control, resume after eviction, Storage screen.
 **Exit:** a movie starts in 1080p from put.io, upgrades to 4K local without user
 action, put.io usage stays < 100 GB and local < 100 GB through a 20-movie soak test.
 
@@ -60,12 +61,14 @@ E-AC3) → put.io HLS. Subtitles from put.io + OpenSubtitles, audio/subtitle
 track pickers, language preferences fed into the ranker.
 **Exit:** ≥ 90% direct play; every remaining failure has a working fallback.
 
-## Phase 5 — Phone, Chromecast & remote access
+## Phase 5 — Phone & Google Cast
 
-Phone layout as a PWA, Cast sender (Default Media Receiver first, custom
-receiver if progress reporting needs it), "play on TV" handoff, Tailscale
-(HTTPS via MagicDNS, which Cast senders require) for watching away from home.
-**Exit:** browse on the phone, cast to the Chromecast, progress syncs to the TV.
+Phone layout as a PWA; Cast sender to the G5's built-in Google Cast (Default
+Media Receiver first, custom receiver if progress reporting needs it); "play on
+TV" handoff. LAN-only — if Phase 0 shows the Cast sender needs a secure context,
+serve chill over HTTPS on the LAN (Caddy with a DNS-01 certificate for a private
+hostname pointing at the server's LAN IP; nothing exposed to the internet).
+**Exit:** browse on the phone, cast to the TV, progress syncs to the TV app.
 
 ## Phase 6 — TV shows
 
