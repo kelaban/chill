@@ -52,7 +52,7 @@ Not affiliated with chill.institute; it's an API we call.
 | Live API smoke tests | `npm run test:live` runs only the keyless catalog. put.io / chill.institute suites are **opt-in** (`LIVE_PUTIO=1`, `LIVE_CHILL=1`) — put.io flagged the dev IP once; use fakes and recorded fixtures instead |
 | Build + bundle check | `npm run build && npm run check:bundle` |
 | TV package | `CHILL_URL=http://192.168.1.21:7878 npm run webos:package` |
-| Deploy to farnsworth | `ssh keith@farnsworth 'cd ~/apps/chill && git -C src pull && docker compose up -d --build'` (push first; see `documentation/DEPLOY.md`) |
+| Deploy to farnsworth | Push to `main`: the server builds and switches itself within ~10 min, never mid-movie. Changes under `docker/` need `ssh keith@farnsworth 'cd ~/apps/chill && git -C src pull && docker compose up -d --build'`. See `documentation/DEPLOY.md` |
 
 Demo mode (`CHILL_FAKE=1`) runs everything against fakes, including real ffmpeg
 alignment and the seamless switch, so most work never needs real credentials.

@@ -139,8 +139,18 @@ export async function home(ctx: Ctx, profileId: number): Promise<HomeResponse> {
   const mine = ctx.db.prepare("SELECT tmdb_id FROM my_list WHERE profile_id = ? ORDER BY added_at DESC").all(profileId) as { tmdb_id: number }[];
   push("my-list", "My List", summariesFromTitles(ctx, mine));
 
-  const readyRows = ctx.db.prepare("SELECT tmdb_id, MAX(created_at) AS c FROM variants WHERE ready = 1 GROUP BY tmdb_id ORDER BY c DESC LIMIT 20").all() as { tmdb_id: number }[];
-  push("ready", "Ready to Play", summariesFromTitles(ctx, readyRows));
+  // What this profile played and what the household fetched, newest first. Independent of
+  // whether a copy is still on hand: the home library is a cache that empties on every Play.
+  const recent = ctx.db
+    .prepare(
+      `SELECT tmdb_id, MAX(at) AS at FROM (
+         SELECT tmdb_id, created_at AS at FROM acquisitions WHERE state NOT IN ('failed', 'cancelled')
+         UNION ALL
+         SELECT tmdb_id, updated_at AS at FROM watch_state WHERE profile_id = ?
+       ) GROUP BY tmdb_id ORDER BY at DESC LIMIT 20`,
+    )
+    .all(profileId) as { tmdb_id: number }[];
+  push("recent", "Recent", summariesFromTitles(ctx, recent));
 
   const settle = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
   const [trending, popular, topRated, nowPlaying, ...genreLists] = await Promise.all([

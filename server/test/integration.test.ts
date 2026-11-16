@@ -230,3 +230,38 @@ describe("audio the browser can't decode (E-AC3 in MKV)", () => {
     expect(p.videoCodec).toBe("h264"); // copied, not re-encoded
   });
 });
+
+describe("the home library is a cache of what's on now", () => {
+  const PARASITE = 496243;
+  type LocalRow = { id: string; tmdb_id: number; local_path: string };
+  const local = () => ctx.db.prepare("SELECT id, tmdb_id, local_path FROM variants WHERE location = 'local'").all() as LocalRow[];
+
+  it("starting a title clears other titles' home copies (but a My List prefetch doesn't)", async () => {
+    await advance(60_000, 5000); // let Parasite finish copying home
+    const before = local().filter((v) => v.tmdb_id !== HEAT);
+    expect(before.map((v) => v.tmdb_id)).toContain(PARASITE);
+
+    await api("POST", "/api/my-list/603");
+    expect(local().filter((v) => v.tmdb_id !== HEAT).map((v) => v.id)).toEqual(expect.arrayContaining(before.map((v) => v.id)));
+    t += 1000;
+
+    // Heat's own home copy went when 603 started (storage limits, above); this Play re-acquires it.
+    await api("POST", `/api/titles/${HEAT}/play`);
+    expect(local().filter((v) => v.tmdb_id !== HEAT)).toEqual([]);
+    for (const v of before) expect(fs.existsSync(path.join(ctx.cfg.libraryDir, v.local_path))).toBe(false);
+    const reasons = ctx.db.prepare("SELECT DISTINCT reason FROM storage_events WHERE action = 'evict' AND tier = 'local'").pluck().all();
+    expect(reasons).toContain(`cache: started ${HEAT}`);
+  });
+
+  it("lists what was played or fetched under Recent, newest first, even once evicted", async () => {
+    const home = await api<{ rows: { id: string; title: string; items: { tmdbId: number }[] }[] }>("GET", "/api/home");
+    expect(home.rows.find((r) => r.id === "ready")).toBeUndefined();
+    const recent = home.rows.find((r) => r.id === "recent")!;
+    expect(recent.title).toBe("Recent");
+    const ids = recent.items.map((x) => x.tmdbId);
+    expect(ids.slice(0, 2)).toEqual([HEAT, 603]); // the latest Play, then the My List prefetch
+    expect(ids).toEqual(expect.arrayContaining([HEAT, PARASITE, 27205]));
+    expect(ids.indexOf(PARASITE)).toBeLessThan(ids.indexOf(27205));
+    expect(ids).not.toContain(FAKE_NO_RELEASES_ID); // that Play failed
+  });
+});

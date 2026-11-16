@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { admit, evictionClass, planEviction, type VariantFacts } from "../src/domain/storage.js";
+import { admit, cacheEvictions, evictionClass, planEviction, type VariantFacts } from "../src/domain/storage.js";
 import { days } from "./helpers.js";
 
 const NOW = new Date("2026-11-16T12:00:00Z");
@@ -82,5 +82,27 @@ describe("admit", () => {
   });
   it("refuses files larger than the whole budget", () => {
     expect(admit(95 * GB, [], 0, BUDGET, NOW).ok).toBe(false);
+  });
+});
+
+describe("cacheEvictions (the home library is a cache of what's on now)", () => {
+  it("clears every other title's home copies, however fresh", () => {
+    const vs = [
+      v("this-one", { tmdbId: 7 }),
+      v("this-one-4k", { tmdbId: 7, superseded: false }),
+      v("other-fresh", { tmdbId: 8, createdAt: ago(0), lastPlayedAt: ago(0) }),
+      v("other-watched", { tmdbId: 9, watch: { watched: true, updatedAt: ago(0) } }),
+    ];
+    expect(cacheEvictions(vs, 7, NOW)).toEqual(["other-fresh", "other-watched"]);
+  });
+  it("keeps what's playing, pinned or protected, and leaves put.io to the budget rules", () => {
+    const vs = [
+      v("playing", { tmdbId: 8, playing: true }),
+      v("pinned", { tmdbId: 8, pinned: true }),
+      v("protected", { tmdbId: 8, protected: true }),
+      v("staging", { tmdbId: 8, tier: "putio" }),
+      v("gone", { tmdbId: 8 }),
+    ];
+    expect(cacheEvictions(vs, 7, NOW)).toEqual(["gone"]);
   });
 });

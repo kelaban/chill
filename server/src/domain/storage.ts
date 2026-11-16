@@ -105,6 +105,15 @@ export function planEviction(
   return { evict, freedBytes: usedBytes - used, usedAfter: used, goalBytes: goal, satisfied: used <= goal };
 }
 
+/**
+ * The home library is a cache of what's being watched now: starting `keepTmdbId`
+ * clears every other title's home copies that may go (never one that's playing,
+ * pinned or protected). put.io copies are left to the budget rules.
+ */
+export function cacheEvictions(variants: VariantFacts[], keepTmdbId: number, now: Date, cfg: EvictionConfig = DEFAULT_EVICTION): string[] {
+  return variants.filter((v) => v.tier === "local" && v.tmdbId !== keepTmdbId && evictionClass(v, now, cfg) !== null).map((v) => v.id);
+}
+
 export type Admission =
   | { ok: true; evict: string[] }
   | { ok: false; reason: string; shortBytes: number };

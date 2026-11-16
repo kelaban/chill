@@ -77,9 +77,13 @@ has their own Continue Watching and My List. No public sign-up, ever.
   So the instant pick prefers the same dynamic range as the target. If they still
   differ, the switch waits for the next natural break (pause, seek, or resume).
   See `ARCHITECTURE.md` → *Seamless upgrade*.
-- **put.io is a staging tier, local is the library tier.** Once a file is safely
+- **put.io is a staging tier, local is a cache of what's on now.** Once a file is safely
   mirrored home, its put.io copy is deleted to keep put.io free for new transfers.
-- **Budgets with watermarks.** Each tier has a 100 GB budget; eviction starts at
+  Pressing Play clears every *other* title's home copy (except what's playing or
+  pinned), so the home server holds roughly one film at a time. Watching an
+  evicted title again re-acquires it, and resume still works.
+- **Budgets with watermarks** (a backstop for local copies that land between Plays, such as
+  My List prefetches, and the main rule for put.io). Each tier has a 100 GB budget; eviction starts at
   90% and stops at 75%. Order: superseded copies → put.io copies already mirrored →
   watched titles (after 3 days) → stale prefetches → stale in-progress → LRU.
   Never evicted: what's playing, pinned items, in-flight dependencies.

@@ -14,6 +14,7 @@ First deployed 2026-11-16.
 | TV package | `CHILL_URL=http://192.168.1.21:7878 npm run webos:package` |
 | App dir | `~/apps/chill/` (same pattern as the host's other apps in `~/apps/<app>/`) |
 | Container | `chill`, compose project `chill`, image `chill:local` built **on the host** |
+| Updates | **Automatic.** Push to `main`; farnsworth builds it and switches within ~5–10 min, never mid-movie (see *Self-update*) |
 | nginx | **Not used yet.** The host's nginx (`~/apps/nginx`) proxies other apps; see *Adding nginx* below |
 | Docker | Engine 23.0, Compose v2.17 (old: keep compose files simple; `env_file` must be the plain-list form) |
 
@@ -23,8 +24,9 @@ First deployed 2026-11-16.
 ~/apps/chill/
   docker-compose.yaml   # host-only file, reproduced below (not the repo's docker/compose.yml)
   .env                  # secrets + budgets, chmod 600. Never committed.
-  src/                  # git clone of https://github.com/kelaban/chill (branch: main)
-  data/                 # bind-mounted to /data: SQLite DB, cache, library/ (downloaded films)
+  src/                  # git clone of https://github.com/kelaban/chill (branch: main), used to build the image
+  data/                 # bind-mounted to /data: SQLite DB, cache, library/ (downloaded films),
+                        #   releases/ (self-update builds and state)
 ```
 
 `docker-compose.yaml`:
@@ -48,7 +50,44 @@ services:
 ```
 
 `.env` started as a copy of the developer's `docker/.env` (format: `docker/.env.example`),
-with one host-specific override: `LOCAL_BUDGET_GB=100` (see DECISIONS D32).
+with host-specific overrides: `LOCAL_BUDGET_GB=100` (see DECISIONS D32) and
+`CHILL_AUTO_UPDATE=1` (self-update).
+
+## Self-update
+
+The image's entrypoint is `docker/supervise.sh`. With `CHILL_AUTO_UPDATE=1` it keeps
+chill on the latest `main`, with no cron, no Docker socket and no registry:
+
+1. A poller inside the container fetches `main` every 5 min (`CHILL_UPDATE_POLL_S`).
+   For a new commit it builds a release beside the running one in
+   `data/releases/builds/<sha>/` (`npm ci` + build), then writes `data/releases/pending`.
+2. The server checks `pending` every 30 s. Once nothing has played for 2 minutes it shuts
+   down gracefully and **exits 75**. Interrupted downloads and jobs resume on restart.
+3. The supervisor swaps `current → previous` and `pending → current`, and starts the new
+   release in a few seconds. `/api/health` reports the running `commit` (`null` = the image's own build).
+
+Failure handling:
+
+- **Build fails:** the commit goes on `data/releases/bad` and is skipped. The running
+  release is untouched. Build output is in `data/releases/logs/build-<sha>.log`.
+- **New release crashes within 10 min of the swap** (`CHILL_ROLLBACK_WINDOW_S`): the commit is
+  marked bad and the previous release starts again. Push a fix and it's picked up as usual.
+- **Any other crash:** restarted in place with backoff (5 s doubling to 160 s).
+  If the whole container exits, Docker's `restart: unless-stopped` brings it back.
+- **Schema:** older code ignores migrations it doesn't know, so additive migrations
+  roll back fine. A destructive migration needs a fix-forward (DECISIONS D35).
+
+What self-update does **not** cover: changes to `docker/` itself (the Dockerfile, the
+supervisor, system packages). The supervisor logs a warning when a commit touches
+`docker/`. Apply those with a manual image rebuild (below).
+
+State files in `data/releases/` (plain text, safe to read): `current`, `previous`,
+`pending`, `bad`, `swapped_at`, plus `repo/` (bare clone), `builds/`, `logs/`, `.npm/`.
+
+- Skip a commit by hand: `echo <full-sha> >> data/releases/bad`.
+- Retry a commit that was marked bad: remove its line from `bad`.
+- Pin a release: set `CHILL_AUTO_UPDATE=0` in `.env` and `docker compose up -d`.
+  This runs the image's own build. To pin a specific commit, check it out in `src/` and rebuild.
 
 ## Routine operations
 
@@ -57,16 +96,18 @@ All commands run on the host in `~/apps/chill`. From the laptop, wrap with
 
 | Task | Command |
 |---|---|
-| **Deploy latest `main`** | `git -C src pull && docker compose up -d --build` |
-| Deploy a specific commit | `git -C src fetch && git -C src checkout <sha> && docker compose up -d --build` |
+| Deploy latest `main` | Nothing: push, and self-update picks it up |
+| **Rebuild the image** (after `docker/` changes) | `git -C src pull && docker compose up -d --build` (interrupts playback: pick a quiet moment) |
 | Status / health | `docker ps --filter name=^chill$` · `curl -s localhost:7878/api/health` |
-| Logs | `docker compose logs -f --tail 100` |
+| What's running / staged | `cat data/releases/current data/releases/pending 2>/dev/null` |
+| Logs | `docker compose logs -f --tail 100` (supervisor lines start with `supervisor:`) |
+| Self-update history | `docker compose logs \| grep supervisor:` |
 | Restart | `docker compose restart` |
 | Stop | `docker compose down` (data in `./data` is kept) |
 | Edit config | `nano .env` then `docker compose up -d` (re-creates the container with the new env) |
 | Clean old images | `docker image prune -f` (after a few rebuilds) |
 
-Deploys only pick up **pushed** commits: push to GitHub first. Fresh clone:
+Self-update and rebuilds only pick up **pushed** commits. Fresh clone:
 `git clone -b main https://github.com/kelaban/chill src` (`main` is the GitHub
 default branch; `-b main` just makes it explicit). The clone is
 anonymous HTTPS (the repo is publicly readable), so the host has no git credentials.
@@ -100,9 +141,14 @@ Never run demo mode against `./data`: fake titles and variants would land in the
 
 - The host has a single ~228 GB root disk, shared with Home Assistant, Frigate
   recordings, Plex metadata, etc. About 99 GB was free at first deploy.
-- `LOCAL_BUDGET_GB=100` means chill's library may use roughly all of that. If the disk runs
+- The home library is a **cache of what's on now** (DECISIONS D33): pressing Play clears
+  every other title's home copy. Normally that's one film, plus My List prefetches that
+  landed since the last Play.
+- `LOCAL_BUDGET_GB=100` is the backstop on top of that. If the disk runs
   low, lower it in `.env` and `docker compose up -d`. Admission control evicts down to
   the new budget. Check with `df -h /` and `du -sh ~/apps/chill/data`.
+- Self-update keeps up to three builds (current, previous, staged). Each is
+  a few hundred MB, in `data/releases/builds/`.
 - `./data` is runtime state. Not in git, and not backed up yet (farnsworth-mgmt's restic
   plan is not implemented). Losing it loses watch progress and the local library.
   put.io copies and the catalog are recoverable.

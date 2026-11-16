@@ -28,6 +28,9 @@ const Env = z.object({
   /** Fake mode: seconds the fake put.io → local mirror takes. */
   FAKE_MIRROR_KBPS: z.coerce.number().default(0),
   STATIC_DIR: z.string().optional(),
+  /** Set by docker/supervise.sh in self-update mode: where staged releases live, and which commit this is. */
+  CHILL_RELEASES_DIR: z.string().optional(),
+  CHILL_COMMIT: z.string().optional(),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
@@ -68,6 +71,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     mirrorConnections: e.MIRROR_CONNECTIONS,
     fakeTimings: { instantS: e.FAKE_INSTANT_S, targetS: e.FAKE_TARGET_S, mirrorKbps: e.FAKE_MIRROR_KBPS },
     staticDir: e.STATIC_DIR ? path.resolve(e.STATIC_DIR) : null,
+    releasesDir: e.CHILL_RELEASES_DIR ? path.resolve(e.CHILL_RELEASES_DIR) : null,
+    commit: e.CHILL_COMMIT ?? null,
     logLevel: e.LOG_LEVEL,
   };
 }

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { JobDto, StorageReport, Tier, VariantDto } from "@chill/shared";
 import { putioFolder, type Ctx } from "../context.js";
-import { admit, DEFAULT_EVICTION, planEviction, type Admission, type Budget, type VariantFacts } from "../domain/storage.js";
+import { admit, cacheEvictions, DEFAULT_EVICTION, planEviction, type Admission, type Budget, type VariantFacts } from "../domain/storage.js";
 import { getSetting } from "../db.js";
 import { log } from "../log.js";
 
@@ -50,6 +50,11 @@ export function budget(ctx: Ctx, tier: Tier): Budget {
 
 export function isPlaying(ctx: Ctx, v: Pick<VariantRow, "last_heartbeat_at">): boolean {
   return !!v.last_heartbeat_at && ctx.clock.now() - v.last_heartbeat_at < PLAYING_WINDOW_MS;
+}
+
+/** Is any copy being watched right now (a heartbeat in the last couple of minutes)? */
+export function anythingPlaying(ctx: Ctx): boolean {
+  return !!ctx.db.prepare("SELECT 1 FROM variants WHERE last_heartbeat_at > ? LIMIT 1").get(ctx.clock.now() - PLAYING_WINDOW_MS);
 }
 
 /** Bytes on a tier: stored variants plus what in-flight work has reserved. */
@@ -157,6 +162,14 @@ export async function admitAndMakeRoom(ctx: Ctx, tier: Tier, sizeBytes: number):
   for (const id of a.evict) await evictVariant(ctx, id, `room for ${(sizeBytes / 1e9).toFixed(1)} GB on ${tier}`);
   if (a.evict.length) publishStorage(ctx);
   return a;
+}
+
+/** Starting a title empties the home cache of every other title (see `cacheEvictions`). */
+export async function clearLocalCache(ctx: Ctx, keepTmdbId: number): Promise<string[]> {
+  const ids = cacheEvictions(facts(ctx, "local"), keepTmdbId, new Date(ctx.clock.now()), DEFAULT_EVICTION);
+  for (const id of ids) await evictVariant(ctx, id, `cache: started ${keepTmdbId}`);
+  if (ids.length) publishStorage(ctx);
+  return ids;
 }
 
 /** Bring a tier back under its high watermark. */

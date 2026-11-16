@@ -78,7 +78,7 @@
 | Build target | Vite `build.target: "chrome132"` | The G3's measured engine (webOS 11.2, Chromium 132; Phase 0). CI fails if the output needs anything newer. |
 | Seamless switch | Two `<video>` elements + `requestVideoFrameCallback`; ffmpeg audio cross-correlation + `scdet` on the server | See *Seamless upgrade*. |
 | Tests | Vitest; MSW fixtures for TMDB/chill/put.io | |
-| Deploy | `git pull` + `docker compose up -d --build` on the home server (farnsworth) | Image built on the host; no registry. See [`DEPLOY.md`](DEPLOY.md). |
+| Deploy | Self-updating container on the home server (farnsworth): `docker/supervise.sh` builds each new `main` commit beside the running one; the server exits 75 when idle to swap | No registry, no Docker socket. See [`DEPLOY.md`](DEPLOY.md). |
 
 ## Domain model (SQLite)
 
@@ -179,11 +179,14 @@ Same as cold Play, but the ranker prefers the release (or edition) recorded in
 `last_variant_id` so timelines match. When durations differ by > 2%, the position
 maps proportionally and rewinds 15 s.
 
-### Eviction (runs after every acquisition and hourly)
+### Eviction (runs on every Play, after every acquisition, and hourly)
 
-Pure function `planEviction(variants, budgets, now) → variantIds`, applied per tier.
-See PRD for the order. Admission control: a transfer or mirror only starts when its
-tier has `size × 1.1` free after planned evictions; otherwise its job waits.
+- **On Play** (not a My List prefetch): `cacheEvictions(localVariants, tmdbId, now)`
+  clears every other title's home copy that `evictionClass` lets go (not playing, pinned
+  or protected). The home library is a cache of what's on now, not a collection.
+- **Budgets:** pure function `planEviction(variants, budgets, now) → variantIds`, applied per tier.
+  See PRD for the order. Admission control: a transfer or mirror only starts when its
+  tier has `size × 1.1` free after planned evictions; otherwise its job waits.
 
 ## HTTP API (sketch)
 

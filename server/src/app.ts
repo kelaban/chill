@@ -52,7 +52,7 @@ export function createApp(ctx: Ctx) {
     return c.json({ error: err.message }, status === 404 ? 404 : 500);
   });
 
-  app.get("/api/health", (c) => c.json({ ok: true, fake: ctx.cfg.fake, catalog: ctx.cfg.fake ? "fake" : ctx.cfg.catalog }));
+  app.get("/api/health", (c) => c.json({ ok: true, fake: ctx.cfg.fake, catalog: ctx.cfg.fake ? "fake" : ctx.cfg.catalog, commit: ctx.cfg.commit }));
 
   // ---- profiles
   app.get("/api/profiles", (c) => c.json(ctx.db.prepare("SELECT id, name, color FROM profiles ORDER BY id").all()));

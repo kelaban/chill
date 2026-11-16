@@ -8,7 +8,7 @@ import { PermanentError } from "../jobs.js";
 import { log } from "../log.js";
 import { ensureTitle, watchState } from "./catalog.js";
 import { deviceCaps, qualityProfile, ranking, releaseById } from "./releases.js";
-import { admitAndMakeRoom, isPlaying, publishStorage, variant, variantsFor, type VariantRow } from "./storage.js";
+import { admitAndMakeRoom, clearLocalCache, isPlaying, publishStorage, variant, variantsFor, type VariantRow } from "./storage.js";
 
 export interface AcqRow {
   id: number;
@@ -129,6 +129,10 @@ function publish(ctx: Ctx, tmdbId: number) {
 
 /** Press Play (or prefetch for My List). Idempotent. */
 export async function play(ctx: Ctx, tmdbId: number, profileId: number, opts: { prefetch?: boolean } = {}): Promise<PlayStatus> {
+  if (!opts.prefetch) {
+    // The home library is a cache of what's on now: make room before anything else.
+    await clearLocalCache(ctx, tmdbId).catch((err) => log.warn("clearing the home cache failed", { tmdbId, err: String(err) }));
+  }
   if (bestVariant(ctx, tmdbId)) {
     if (!opts.prefetch) ensureUpgradeQueued(ctx, tmdbId);
     return playStatus(ctx, tmdbId, profileId);
