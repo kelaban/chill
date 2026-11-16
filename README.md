@@ -35,6 +35,7 @@ cleanup.
      Without it chill uses Cinemeta, a keyless catalog (weaker search, no recommendations).
 2. On the home server: `cp docker/.env.example docker/.env`, fill in the tokens, then
    `docker compose -f docker/compose.yml up -d` → http://&lt;server&gt;:7878
+   (The household install on farnsworth is set up differently: see [`documentation/DEPLOY.md`](documentation/DEPLOY.md).)
 3. On the TV (Developer Mode on, see [`documentation/webos.md`](documentation/webos.md)):
    `CHILL_URL=http://<server-ip>:7878 npm run webos:package`, then install the IPK.
 

@@ -78,7 +78,7 @@
 | Build target | Vite `build.target: "chrome94"` | webOS 23, the G3's floor; raised if Phase 0 finds a newer engine. CI fails if the output needs anything newer. |
 | Seamless switch | Two `<video>` elements + `requestVideoFrameCallback`; ffmpeg audio cross-correlation + `scdet` on the server | See *Seamless upgrade*. |
 | Tests | Vitest; MSW fixtures for TMDB/chill/put.io | |
-| Deploy | GitHub Actions → GHCR image → `docker compose pull && up -d` on the server | |
+| Deploy | `git pull` + `docker compose up -d --build` on the home server (farnsworth) | Image built on the host; no registry. See [`DEPLOY.md`](DEPLOY.md). |
 
 ## Domain model (SQLite)
 

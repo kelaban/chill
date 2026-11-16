@@ -20,7 +20,8 @@ Not affiliated with chill.institute; it's an API we call.
   prepend: `> Completed YYYY-MM-DD — what shipped; any deviations from the plan.`
 - **Living documents** — update in place, never archive: `documentation/PRD.md`,
   `documentation/ARCHITECTURE.md`, `documentation/ROADMAP.md`,
-  `documentation/BACKLOG.md`, `documentation/TESTING.md`, `documentation/DECISIONS.md` (calls made on
+  `documentation/BACKLOG.md`, `documentation/TESTING.md`, `documentation/DEPLOY.md` (how it runs on
+  the home server), `documentation/DECISIONS.md` (calls made on
   assumptions — add one whenever you guess instead of measure). `ISSUES.md` is a lightweight bug tracker, one `##`
   heading per bug.
 - Before starting work, pick the relevant plan. If none exists, write one first.
@@ -50,7 +51,8 @@ Not affiliated with chill.institute; it's an API we call.
 | Typecheck / tests / e2e | `npm run typecheck` · `npm test` · `npm run test:e2e` |
 | Live API smoke tests | `npm run test:live` runs only the keyless catalog. put.io / chill.institute suites are **opt-in** (`LIVE_PUTIO=1`, `LIVE_CHILL=1`) — put.io flagged the dev IP once; use fakes and recorded fixtures instead |
 | Build + bundle check | `npm run build && npm run check:bundle` |
-| TV package | `CHILL_URL=http://<server>:7878 npm run webos:package` |
+| TV package | `CHILL_URL=http://192.168.1.21:7878 npm run webos:package` |
+| Deploy to farnsworth | `ssh keith@farnsworth 'cd ~/apps/chill && git -C src pull && docker compose up -d --build'` (push first; see `documentation/DEPLOY.md`) |
 
 Demo mode (`CHILL_FAKE=1`) runs everything against fakes, including real ffmpeg
 alignment and the seamless switch, so most work never needs real credentials.

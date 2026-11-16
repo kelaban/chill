@@ -43,6 +43,7 @@ skipped for now (Cinemeta stands in). Open items wait on:
 | D27 | A 4K upgrade must be **≥ 50 MB per minute** of film (~6.7 Mbps), else it's a starved encode and not an upgrade | Real data had a 5.5 GB 4K DV of a 139-min film | If good 4K encodes get excluded, lower it | 🏠 |
 | D28 | Original language from Cinemeta's **first production country** (TMDB gives it directly) | Lets "Parasite" pick Korean-audio releases | Wrong for co-productions; fixed by TMDB | 🔑 |
 | D29 | Search **merges chill.institute results**: its releases' IMDb ids become titles, exact matches first | Finds what the catalog misses and guarantees something playable; one cached chill.institute search per query | If chill.institute rate-limits, search only on Enter | 🏠 |
+| D32 | farnsworth runs with `LOCAL_BUDGET_GB=100` | The owner asked for 100; the shared root disk had ~99 GB free at deploy, so a full library could starve Home Assistant / Frigate | `df -h /` on farnsworth after a few weeks; if free space drops under ~15 GB, lower the budget in `~/apps/chill/.env` (see DEPLOY.md) | 🏠 |
 
 ## Settled
 
