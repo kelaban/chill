@@ -4,7 +4,7 @@
 # Verified on the G3 (webOS 11.2) 2026-11-15 — DECISIONS D21.
 #
 # Needs only ssh + curl (no Node), so it runs on the home server from cron:
-#   17 * * * *  ~/apps/chill/renew-devmode.sh 192.168.1.193 ~/.ssh/tv_webos >> ~/apps/chill/devmode.log 2>&1
+#   17 * * * *  ~/apps/chill/src/webos/renew-devmode.sh 192.168.1.193 ~/.ssh/tv_webos >> ~/apps/chill/devmode.log 2>&1
 #
 # The key is the one `ares-novacom --device tv --getkey` downloads, with its
 # passphrase removed (`ssh-keygen -p -N "" -f <key>`) so cron can use it. It only

@@ -143,4 +143,4 @@ and test playback and the seamless upgrade through the proxy before relying on i
   (sops secrets, restic backups, push-deploy). Mostly unimplemented, so treat it as intent,
   not as the current state. If it lands, chill should move under it as `apps/chill/`.
 - [`webos.md`](webos.md): installing the TV app, and the hourly Developer Mode
-  renewal cron job on farnsworth (`~/apps/chill/renew-devmode.sh`, log in `~/apps/chill/devmode.log`).
+  renewal cron job on farnsworth (`~/apps/chill/src/webos/renew-devmode.sh`, log in `~/apps/chill/devmode.log`).

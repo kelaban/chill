@@ -44,10 +44,10 @@ farnsworth:
 # once, from the laptop: give farnsworth a passphrase-less copy of the TV key
 cp ~/.ssh/tv_webos /tmp/k && ssh-keygen -p -N "" -f /tmp/k   # asks for the TV passphrase
 scp /tmp/k keith@farnsworth:.ssh/tv_webos && rm /tmp/k
-scp webos/renew-devmode.sh keith@farnsworth:apps/chill/
+# the script itself comes from the checkout (git pull), nothing to copy
 
 # farnsworth crontab (hourly; renews at most once a day, silent while the TV is off)
-17 * * * * $HOME/apps/chill/renew-devmode.sh 192.168.1.193 >> $HOME/apps/chill/devmode.log 2>&1
+17 * * * * $HOME/apps/chill/src/webos/renew-devmode.sh 192.168.1.193 >> $HOME/apps/chill/devmode.log 2>&1
 ```
 
 `~/apps/chill/devmode.log` gets one line per renewal. If it's had none for a
