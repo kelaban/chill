@@ -24,7 +24,9 @@ First deployed 2026-11-16.
 ~/apps/chill/
   docker-compose.yaml   # host-only file, reproduced below (not the repo's docker/compose.yml)
   .env                  # secrets + budgets, chmod 600. Never committed.
-  src/                  # git clone of https://github.com/kelaban/chill (branch: main), used to build the image
+  src/                  # git clone of https://github.com/kelaban/chill (branch: main): builds the image and
+                        #   holds webos/renew-devmode.sh. Self-update doesn't touch it; the hourly
+                        #   devmode cron job runs `git pull --ff-only` here (see webos.md)
   data/                 # bind-mounted to /data: SQLite DB, cache, library/ (downloaded films),
                         #   releases/ (self-update builds and state)
 ```

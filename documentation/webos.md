@@ -44,10 +44,11 @@ farnsworth:
 # once, from the laptop: give farnsworth a passphrase-less copy of the TV key
 cp ~/.ssh/tv_webos /tmp/k && ssh-keygen -p -N "" -f /tmp/k   # asks for the TV passphrase
 scp /tmp/k keith@farnsworth:.ssh/tv_webos && rm /tmp/k
-# the script itself comes from the checkout (git pull), nothing to copy
+# the script itself comes from the checkout, which the cron job keeps pulled
 
-# farnsworth crontab (hourly; renews at most once a day, silent while the TV is off)
-17 * * * * $HOME/apps/chill/src/webos/renew-devmode.sh 192.168.1.193 >> $HOME/apps/chill/devmode.log 2>&1
+# farnsworth crontab (hourly; renews at most once a day, silent while the TV is off).
+# The pull keeps ~/apps/chill/src on main: self-update builds elsewhere and never touches it.
+17 * * * * cd $HOME/apps/chill/src && git pull -q --ff-only; webos/renew-devmode.sh 192.168.1.193 >> $HOME/apps/chill/devmode.log 2>&1
 ```
 
 `~/apps/chill/devmode.log` gets one line per renewal. If it's had none for a
