@@ -49,6 +49,8 @@ export function Detail() {
     );
 
   const a = availabilityText(avail.data ?? t.availability);
+  const cur = avail.data ?? t.availability;
+  const services = cur.state === "available" || cur.state === "ready" ? cur.services : [];
   const resumable = t.watch && !t.watch.watched && t.watch.positionS > 30;
   const toggleList = async () => {
     await (t.inMyList ? api.removeFromList(id) : api.addToList(id));
@@ -78,6 +80,16 @@ export function Detail() {
             {t.director && <>Director: {t.director} · </>}
             {t.cast.slice(0, 4).map((c) => c.name).join(", ")}
           </div>
+          {services.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-3 text-xl text-white/70" data-testid="services">
+              <span>On</span>
+              {services.map((s) => (
+                <span key={s.code} className="rounded-md px-3 py-1 text-lg font-bold" style={SERVICE_STYLE[s.code] ?? { background: "rgba(255,255,255,0.15)", color: "#fff" }}>
+                  {s.name}
+                </span>
+              ))}
+            </div>
+          )}
           <div className={`mb-8 text-xl ${a.tone}`} data-testid="availability">
             {a.text}
           </div>
@@ -100,3 +112,23 @@ export function Detail() {
     </Page>
   );
 }
+
+/** Brand-ish colours for service chips (text only, no logos). */
+const SERVICE_STYLE: Record<string, { background: string; color: string }> = {
+  netflix: { background: "#e50914", color: "#fff" },
+  max: { background: "#002be7", color: "#fff" },
+  disney: { background: "#113ccf", color: "#fff" },
+  hulu: { background: "#1ce783", color: "#0b0c0f" },
+  appletv: { background: "#f5f5f7", color: "#000" },
+  peacock: { background: "#000", color: "#fff" },
+  paramount: { background: "#0064ff", color: "#fff" },
+  prime: { background: "#00a8e1", color: "#fff" },
+  itunes: { background: "#fb5bc5", color: "#fff" },
+  roku: { background: "#662d91", color: "#fff" },
+  amc: { background: "#000", color: "#fff" },
+  showtime: { background: "#b10000", color: "#fff" },
+  starz: { background: "#000", color: "#fff" },
+  mubi: { background: "#001489", color: "#fff" },
+  criterion: { background: "#111", color: "#fff" },
+  tubi: { background: "#fa382f", color: "#fff" },
+};

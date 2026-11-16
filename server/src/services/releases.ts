@@ -2,6 +2,7 @@ import type { Availability } from "@chill/shared";
 import type { Ctx } from "../context.js";
 import { DEFAULT_DEVICE, DEFAULT_PROFILE, needsUpgrade, rank, type DeviceCaps, type QualityProfile, type Ranking } from "../domain/ranker.js";
 import { releaseLabel, type Release } from "../domain/release.js";
+import { titleServices } from "../domain/services.js";
 import { getSetting } from "../db.js";
 import { ensureTitle } from "./catalog.js";
 
@@ -56,7 +57,8 @@ export function availability(ctx: Ctx, tmdbId: number): Availability {
   const v = ctx.db.prepare("SELECT label FROM variants WHERE tmdb_id = ? AND ready = 1 AND superseded_by IS NULL ORDER BY (location = 'local') DESC, (quality = 'target') DESC LIMIT 1").get(tmdbId) as
     | { label: string }
     | undefined;
-  if (v) return { state: "ready", label: v.label };
+  const services = titleServices(load(ctx, tmdbId)).map(({ code, name }) => ({ code, name }));
+  if (v) return { state: "ready", label: v.label, services };
   const s = ctx.db.prepare("SELECT searched_at FROM searches WHERE tmdb_id = ?").get(tmdbId) as { searched_at: number } | undefined;
   if (!s) {
     const pending = ctx.db.prepare("SELECT 1 FROM jobs WHERE type = 'releases.search' AND state IN ('queued','running') AND json_extract(payload_json, '$.tmdbId') = ?").get(tmdbId);
@@ -69,7 +71,7 @@ export function availability(ctx: Ctx, tmdbId: number): Availability {
   if (!top) return { state: "none" };
   const t = r.target[0];
   const upgrade = t && needsUpgrade(top, t, qualityProfile(ctx), deviceCaps(ctx), row.runtime_min) ? t : null;
-  return { state: "available", instantLabel: releaseLabel(top.release), targetLabel: upgrade ? releaseLabel(upgrade.release) : null, releases: r.instant.length };
+  return { state: "available", instantLabel: releaseLabel(top.release), targetLabel: upgrade ? releaseLabel(upgrade.release) : null, releases: r.instant.length, services };
 }
 
 export function registerReleaseJobs(ctx: Ctx) {

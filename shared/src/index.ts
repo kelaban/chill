@@ -45,8 +45,14 @@ export type Availability =
   | { state: "unknown" }
   | { state: "searching" }
   | { state: "none" }
-  | { state: "available"; instantLabel: string; targetLabel: string | null; releases: number }
-  | { state: "ready"; label: string };
+  | { state: "available"; instantLabel: string; targetLabel: string | null; releases: number; services: Service[] }
+  | { state: "ready"; label: string; services: Service[] };
+
+/** A streaming service a title is on, from its web releases' source tags (Netflix, Max, …). */
+export interface Service {
+  code: string;
+  name: string;
+}
 
 export interface TitleDetail extends TitleSummary {
   imdbId: string | null;

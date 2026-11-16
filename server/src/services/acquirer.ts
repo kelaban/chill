@@ -3,7 +3,8 @@ import type { PutioFile } from "../adapters/types.js";
 import { newId, putioFolder, type Ctx } from "../context.js";
 import { mapPosition, selectVariant, type PlayableVariant } from "../domain/playback.js";
 import { needsUpgrade, type Scored } from "../domain/ranker.js";
-import { factsOf, releaseLabel } from "../domain/release.js";
+import { factsOf, releaseLabel, type Release } from "../domain/release.js";
+import { releaseService } from "../domain/services.js";
 import { PermanentError } from "../jobs.js";
 import { log } from "../log.js";
 import { ensureTitle, watchState } from "./catalog.js";
@@ -307,7 +308,7 @@ export function registerAcquireJobs(ctx: Ctx) {
          VALUES (?, ?, 'putio', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
       )
       .run(vid, a.tmdb_id, a.tier, a.release_id, a.id, file.id, file.size, f?.resolution ?? null, f?.dynamicRange ?? "SDR", f?.video ?? null, f?.audio ?? null,
-        runtime ? runtime * 60 : null, rel ? releaseLabel(rel) : file.name, f?.edition ?? null, ctx.clock.now());
+        runtime ? runtime * 60 : null, rel ? withService(releaseLabel(rel), rel) : file.name, f?.edition ?? null, ctx.clock.now());
     // Measure the file before anyone plays it: the player needs the real audio
     // codec to decide whether this device can decode it (bounded; falls back to
     // release facts and the background probe).
@@ -408,4 +409,10 @@ export function supersedeLower(ctx: Ctx, tmdbId: number, vid: string) {
 export function queueUpgradeIfPlaying(ctx: Ctx, tmdbId: number, toVariantId: string) {
   const playing = variantsFor(ctx, tmdbId).find((v) => v.id !== toVariantId && isPlaying(ctx, v));
   if (playing) ctx.jobs.enqueue("upgrade.prepare", { fromVariantId: playing.id, toVariantId }, { dedupeKey: `upgrade:${playing.id}:${toVariantId}` });
+}
+
+/** "2160p HDR10 WEB-DL · 16.4 GB" → "2160p HDR10 WEB-DL · 16.4 GB · Netflix" when the release names its service. */
+function withService(label: string, rel: Release): string {
+  const svc = releaseService(rel);
+  return svc ? `${label} · ${svc.name}` : label;
 }

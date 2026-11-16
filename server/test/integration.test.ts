@@ -331,3 +331,14 @@ describe("subtitles", () => {
     expect(ctx.db.prepare("SELECT COUNT(*) FROM subtitles WHERE variant_id = ?").pluck().get(v.id)).toBe(0);
   });
 });
+
+describe("where a film streams", () => {
+  it("names services from the releases' source tags, and the playing copy's service", async () => {
+    const d = await api<{ availability: { state: string; services?: { name: string }[] } }>("GET", `/api/titles/${HEAT}`);
+    expect(d.availability.services?.map((s) => s.name)).toEqual(["Netflix"]); // fake: three NF releases; one small HMAX one is noise
+    await api("POST", `/api/titles/${HEAT}/play`);
+    await advance(10_000);
+    const st = await api<PlayStatus>("GET", `/api/titles/${HEAT}/play`);
+    expect(st.stream?.label).toMatch(/· Netflix · (put\.io|Home)$/);
+  });
+});

@@ -61,6 +61,8 @@ export function fakeTmdb(): TmdbApi {
 
 interface FakeReleaseSpec {
   key: string;
+  /** Release service tag (NF, HMAX, …). */
+  source?: string;
   resolution: string;
   quality: string;
   codec: string;
@@ -73,11 +75,11 @@ interface FakeReleaseSpec {
 
 const SPECS: FakeReleaseSpec[] = [
   { key: "cam", resolution: "1080p", quality: "CAM", codec: "x264", audio: "AAC", size: 1.5e9, seeders: 900 },
-  { key: "720", resolution: "720p", quality: "WEB-DL", codec: "x264", audio: "AAC", size: 1.4e9, seeders: 60 },
-  { key: "1080", resolution: "1080p", quality: "WEB-DL", codec: "x264", audio: "DDP5.1", size: 4.2e9, seeders: 300 },
-  { key: "1080hdr", resolution: "1080p", quality: "WEB-DL", codec: "x265", hdr: "HDR10", audio: "DDP5.1", size: 3.1e9, seeders: 420 },
-  { key: "2160hdr", resolution: "2160p", quality: "WEB-DL", codec: "x265", hdr: "HDR10", audio: "DDP5.1 Atmos", size: 16.4e9, seeders: 140 },
-  { key: "2160dv", resolution: "2160p", quality: "WEB-DL", codec: "H.265", hdr: "DV", audio: "DDP5.1 Atmos", size: 19.8e9, seeders: 30 },
+  { key: "720", source: "AMZN", resolution: "720p", quality: "WEB-DL", codec: "x264", audio: "AAC", size: 1.4e9, seeders: 60 },
+  { key: "1080", source: "NF", resolution: "1080p", quality: "WEB-DL", codec: "x264", audio: "DDP5.1", size: 4.2e9, seeders: 300 },
+  { key: "1080hdr", source: "NF", resolution: "1080p", quality: "WEB-DL", codec: "x265", hdr: "HDR10", audio: "DDP5.1", size: 3.1e9, seeders: 420 },
+  { key: "2160hdr", source: "NF", resolution: "2160p", quality: "WEB-DL", codec: "x265", hdr: "HDR10", audio: "DDP5.1 Atmos", size: 16.4e9, seeders: 140 },
+  { key: "2160dv", source: "HMAX", resolution: "2160p", quality: "WEB-DL", codec: "H.265", hdr: "DV", audio: "DDP5.1 Atmos", size: 19.8e9, seeders: 30 },
   { key: "remux", resolution: "2160p", quality: "BluRay REMUX", codec: "HEVC", hdr: "DV HDR10", audio: "TrueHD Atmos", size: 62e9, seeders: 25 },
   { key: "remake", resolution: "1080p", quality: "WEB-DL", codec: "x264", audio: "AAC", size: 3e9, seeders: 500, yearDelta: 30 },
 ];
@@ -109,7 +111,7 @@ export function fakeChill(opts: { mediaUrl: (fileId: number) => string; latencyM
         seeders: s.seeders,
         peers: s.seeders * 2,
         sizeBytes: s.size,
-        info: { title: movie.title, year: year + (s.yearDelta ?? 0), resolution: s.resolution, quality: s.quality, codec: s.codec, hdr: s.hdr, audio: s.audio },
+        info: { title: movie.title, year: year + (s.yearDelta ?? 0), resolution: s.resolution, quality: s.quality, source: s.source, codec: s.codec, hdr: s.hdr, audio: s.audio },
       }));
     },
     async resolvePlayback(fileId, delivery) {
