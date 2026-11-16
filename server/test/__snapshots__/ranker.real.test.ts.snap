@@ -1,0 +1,106 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ranker on real chill.institute results > locks today's picks (review the diff when weights change) 1`] = `
+{
+  "Arrival 2016": {
+    "instant": "2160p HDR10 BluRay · 7.8 GB · 67 seeders",
+    "seamless": null,
+    "upgrade": null,
+  },
+  "Blade Runner 2049 2017": {
+    "instant": "1080p BluRay · 3.4 GB · 593 seeders",
+    "seamless": false,
+    "upgrade": "2160p Dolby Vision BluRay · 20.6 GB",
+  },
+  "Come and See 1985": {
+    "instant": "1080p BluRay · 9.4 GB · 283 seeders",
+    "seamless": null,
+    "upgrade": null,
+  },
+  "Dune 2021": {
+    "instant": "2160p HDR10 WEB-DL · 7.4 GB · 290 seeders",
+    "seamless": true,
+    "upgrade": "2160p HDR10 WEB-DL · 21.8 GB",
+  },
+  "Dune: Part Two 2024": {
+    "instant": "2160p HDR10 BluRay · 13.7 GB · 105 seeders",
+    "seamless": null,
+    "upgrade": null,
+  },
+  "Everything Everywhere All at Once 2022": {
+    "instant": "1080p WEBRip · 2.8 GB · 579 seeders",
+    "seamless": false,
+    "upgrade": "2160p HDR10 BluRay · 16.1 GB",
+  },
+  "Heart of the Beast 2026": {
+    "instant": "2160p Dolby Vision WEBRip · 4.9 GB · 410 seeders",
+    "seamless": true,
+    "upgrade": "2160p Dolby Vision WEB-DL · 21.4 GB",
+  },
+  "Heat 1995": {
+    "instant": "1080p BluRay · 2.1 GB · 176 seeders",
+    "seamless": false,
+    "upgrade": "2160p HDR10 BluRay · 20.2 GB",
+  },
+  "Inception 2010": {
+    "instant": "2160p HDR10 BluRay · 9.6 GB · 271 seeders",
+    "seamless": null,
+    "upgrade": null,
+  },
+  "Knives Out 2019": {
+    "instant": "1080p BluRay · 2.3 GB · 503 seeders",
+    "seamless": false,
+    "upgrade": "2160p HDR10 BluRay · 17.6 GB",
+  },
+  "Mad Max: Fury Road 2015": {
+    "instant": "1080p HDR10 BluRay · 4.9 GB · 37 seeders",
+    "seamless": true,
+    "upgrade": "2160p HDR10 BluRay · 18.0 GB",
+  },
+  "Oppenheimer 2023": {
+    "instant": "2160p Dolby Vision · 7.2 GB · 68 seeders",
+    "seamless": true,
+    "upgrade": "2160p Dolby Vision BluRay · 23.6 GB",
+  },
+  "Parasite 2019": {
+    "instant": "1080p BluRay · 2.2 GB · 811 seeders",
+    "seamless": false,
+    "upgrade": "2160p HDR10 BluRay · 16.9 GB",
+  },
+  "Sicario 2015": {
+    "instant": "2160p HDR10 BluRay · 7.0 GB · 51 seeders",
+    "seamless": null,
+    "upgrade": null,
+  },
+  "Spirited Away 2001": {
+    "instant": "1080p BluRay · 8.6 GB · 396 seeders",
+    "seamless": true,
+    "upgrade": "2160p WEB-DL · 13.0 GB",
+  },
+  "Tampopo 1985": {
+    "instant": "1080p BluRay · 1.9 GB · 108 seeders",
+    "seamless": null,
+    "upgrade": null,
+  },
+  "The Godfather 1972": {
+    "instant": "1080p HDR10 BluRay · 13.2 GB · 71 seeders",
+    "seamless": true,
+    "upgrade": "2160p HDR10 BluRay · 22.0 GB",
+  },
+  "The Grand Budapest Hotel 2014": {
+    "instant": "1080p BluRay · 3.4 GB · 131 seeders",
+    "seamless": false,
+    "upgrade": "2160p Dolby Vision BluRay · 16.3 GB",
+  },
+  "The Matrix 1999": {
+    "instant": "2160p Dolby Vision · 4.3 GB · 44 seeders",
+    "seamless": true,
+    "upgrade": "2160p Dolby Vision WEB-DL · 22.7 GB",
+  },
+  "Top Gun: Maverick 2022": {
+    "instant": "2160p HDR10 WEB-DL · 8.1 GB · 28 seeders",
+    "seamless": null,
+    "upgrade": null,
+  },
+}
+`;

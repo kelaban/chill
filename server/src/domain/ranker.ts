@@ -7,6 +7,24 @@ export interface TitleFacts {
   originalTitle?: string | null;
   year: number | null;
   imdbId?: string | null;
+  /** ISO 639-1 or 639-2 code of the film's original language, when known. */
+  originalLanguage?: string | null;
+  runtimeMin?: number | null;
+}
+
+const LANG_ALIASES: Record<string, string[]> = {
+  en: ["en", "eng", "english"], ja: ["ja", "jpn", "jap", "japanese"], ko: ["ko", "kor", "korean"], fr: ["fr", "fra", "fre", "french", "vff", "vfq", "vf"],
+  es: ["es", "spa", "spanish", "esp", "lat"], de: ["de", "ger", "deu", "german"], it: ["it", "ita", "italian"], hi: ["hi", "hin", "hindi"],
+  ru: ["ru", "rus", "russian"], zh: ["zh", "chi", "zho", "chinese", "cmn", "mandarin"], pt: ["pt", "por", "portuguese"],
+};
+const ACCEPT_ALWAYS = ["multi", "dual", "und"];
+
+/** Does a release's language tag ("ita eng", "jpn", "Multi") include any wanted language? */
+export function languageOk(tag: string | null, wanted: string[]): boolean {
+  if (!tag) return true;
+  const tokens = tag.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  const accept = new Set([...ACCEPT_ALWAYS, ...wanted.flatMap((w) => LANG_ALIASES[w.toLowerCase()] ?? [w.toLowerCase()])]);
+  return tokens.some((t) => accept.has(t));
 }
 
 export interface QualityProfile {
@@ -83,7 +101,6 @@ function dropReason(t: TitleFacts, r: Release, f: ReleaseFacts, p: QualityProfil
   if (r.sizeBytes < W.minBytes) return "too small (sample?)";
   if (r.seeders < W.minSeeders) return "too few seeders";
   if (r.sizeBytes > Math.max(p.target.maxBytes, p.instant.maxBytes)) return "too large";
-  if (f.language && !["multi", "und", ...p.languages].some((l) => f.language!.startsWith(l))) return `language ${f.language}`;
   if (d.unsupportedAudio.includes(f.audio)) return `unsupported audio ${f.audio}`;
   if (f.dynamicRange === "DV" && !d.dolbyVision) return "Dolby Vision unsupported";
   return null;
@@ -107,20 +124,22 @@ const TARGET_SRC: Record<Source, number> = { webdl: 3, bluray: 3, webrip: 1.5, h
  */
 export function instantScore(r: Release, f: ReleaseFacts, p: QualityProfile, d: DeviceCaps, preferredRanges: DynamicRange[] = p.target.dynamicRanges): number {
   return (
-    W.instant.seeders * log2p(r.seeders) +
+    W.instant.seeders * log2p(Math.min(r.seeders, W.instant.seedersCap)) +
     sizeFit(r.sizeBytes, p.instant.sweetSpotBytes) +
     (f.resolution ? INSTANT_RES[f.resolution] ?? 0 : W.instant.resUnknown) +
     INSTANT_SRC[f.source] +
-    (preferredRanges.includes(f.dynamicRange) ? W.instant.matchesTargetRange : 0) -
+    (preferredRanges.includes(f.dynamicRange) && r.seeders >= W.instant.matchMinSeeders ? W.instant.matchesTargetRange : 0) -
     (d.riskyAudio.includes(f.audio) ? W.riskyAudioPenalty : 0) -
     (f.video === "other" ? W.instant.oddCodecPenalty : 0)
   );
 }
 
 /** null when the release isn't a target candidate at all. */
-export function targetScore(r: Release, f: ReleaseFacts, p: QualityProfile, d: DeviceCaps): number | null {
+export function targetScore(r: Release, f: ReleaseFacts, p: QualityProfile, d: DeviceCaps, runtimeMin?: number | null): number | null {
   const t = p.target;
   if (r.seeders < t.minSeeders) return null;
+  // A starved 4K encode is not an upgrade.
+  if (f.resolution && f.resolution >= 2160 && r.sizeBytes < (runtimeMin ? runtimeMin * W.uhdMinBytesPerMinute : W.uhdMinBytes)) return null;
   let res: number;
   if (f.resolution === t.resolution && r.sizeBytes <= t.maxBytes) res = W.target.resMatch;
   else if (f.resolution === t.fallback.resolution && r.sizeBytes <= t.fallback.maxBytes) res = W.target.resFallback;
@@ -152,7 +171,16 @@ export function rank(
       dropped.push({ id: r.id, reason: why });
       continue;
     }
+    // Wanted languages pass; the film's own original language passes with a small
+    // penalty (subtitles); anything else is dropped.
+    const wanted = languageOk(f.language, profile.languages);
+    const original = !wanted && !!title.originalLanguage && languageOk(f.language, [title.originalLanguage]);
+    if (!wanted && !original) {
+      dropped.push({ id: r.id, reason: `language ${f.language}` });
+      continue;
+    }
     const bonus =
+      (original ? -W.originalLanguageOnly : 0) +
       (prefer?.releaseId === r.id ? W.preferSameRelease : 0) +
       (prefer?.edition !== undefined && (prefer.edition ?? null) === f.edition ? W.preferSameEdition : 0);
     kept.push({ r, f, bonus });
@@ -160,7 +188,7 @@ export function rank(
   // Target first: the instant pick prefers the dynamic range it will upgrade to.
   const target: Scored[] = [];
   for (const { r, f, bonus } of kept) {
-    const ts = targetScore(r, f, profile, device);
+    const ts = targetScore(r, f, profile, device, title.runtimeMin);
     if (ts !== null) target.push({ release: r, facts: f, score: ts + bonus });
   }
   target.sort(bySCore);
@@ -173,8 +201,25 @@ export function rank(
 }
 
 /** Does this pick already satisfy the target profile (so no upgrade is needed)? */
-export function meetsTarget(s: Scored, p: QualityProfile = DEFAULT_PROFILE): boolean {
-  return s.facts.resolution === p.target.resolution && p.target.dynamicRanges.includes(s.facts.dynamicRange) && s.release.sizeBytes <= p.target.maxBytes;
+export function meetsTarget(s: Scored, p: QualityProfile = DEFAULT_PROFILE, d: DeviceCaps = DEFAULT_DEVICE, runtimeMin?: number | null): boolean {
+  return (
+    s.facts.resolution === p.target.resolution &&
+    p.target.dynamicRanges.includes(s.facts.dynamicRange) &&
+    targetScore(s.release, s.facts, p, d, runtimeMin) !== null
+  );
+}
+
+/**
+ * Should `target` be fetched after `instant`? Yes when it's higher resolution or
+ * a better picture type, or when the instant copy is a starved 4K encode and the
+ * target is a proper one with the same picture. Never a sideways or downward move.
+ */
+export function needsUpgrade(instant: Scored, target: Scored, p: QualityProfile = DEFAULT_PROFILE, d: DeviceCaps = DEFAULT_DEVICE, runtimeMin?: number | null): boolean {
+  if (instant.release.id === target.release.id || meetsTarget(instant, p, d, runtimeMin)) return false;
+  if (isBetter(instant.facts, target.facts)) return true;
+  const sameTier = !isBetter(target.facts, instant.facts);
+  const starved4k = (instant.facts.resolution ?? 0) >= 2160 && targetScore(instant.release, instant.facts, p, d, runtimeMin) === null;
+  return sameTier && starved4k;
 }
 
 /** Is `b` a real upgrade over `a`? */

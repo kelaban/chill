@@ -68,3 +68,24 @@ describe("put.io (live)", () => {
     }
   });
 });
+
+describe("Cinemeta catalog (live, keyless)", () => {
+  it("searches, lists, and resolves details with TMDB ids", async () => {
+    const { cinemetaClient } = await import("../src/adapters/cinemeta.js");
+    const map = new Map<number, string>();
+    const c = cinemetaClient({ imdbFor: (id) => map.get(id) ?? null, remember: (id, imdb) => void map.set(id, imdb) });
+    const hits = await c.search("Heat");
+    const heat = hits.find((m) => m.id === 949);
+    expect(heat?.title).toBe("Heat");
+    const d = await c.movie(949);
+    expect(d.imdb_id).toBe("tt0113277");
+    expect(d.runtime).toBeGreaterThan(150);
+    expect(d.original_language).toBe("en");
+    const top = await c.list("trending");
+    expect(top.length).toBeGreaterThan(20);
+    const g = await c.discover({ genre: 878 });
+    expect(g.results.length).toBeGreaterThan(20);
+    const img = await c.image("w342", heat!.poster_path!);
+    expect(img.body.byteLength).toBeGreaterThan(5000);
+  });
+});

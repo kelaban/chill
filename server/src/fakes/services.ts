@@ -43,6 +43,10 @@ export function fakeTmdb(): TmdbApi {
       if (!d) throw Object.assign(new Error(`TMDB /movie/${id} → HTTP 404`), { status: 404 });
       return d;
     },
+    async byImdb(imdbId) {
+      const m = fakeMovies().find((x) => fakeDetail(x.id)?.imdb_id === imdbId);
+      return m ?? null;
+    },
     async genres() {
       return GENRES;
     },

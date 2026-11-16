@@ -9,8 +9,10 @@ the background, is copied to the home server, and **swaps in mid-movie without a
 visible seam**. Storage on put.io and at home is managed automatically; your
 place in every movie is kept.
 
-**Status:** Phases 1–2 built and tested in demo mode. Waiting on API keys and
-the TV for real-world testing: see [`documentation/DECISIONS.md`](documentation/DECISIONS.md).
+**Status:** Phases 1–2 built. Tested in demo mode, and end to end against the
+real chill.institute and put.io (a real film searched, transferred, played,
+copied home, and cleaned up). Not yet on the TV: see
+[`documentation/DECISIONS.md`](documentation/DECISIONS.md).
 
 ## Try it now (demo mode, no keys)
 
@@ -26,10 +28,11 @@ cleanup.
 
 ## Run it for real
 
-1. Get three tokens (all free):
-   - **TMDB**: themoviedb.org → Settings → API → *API Read Access Token*
+1. Get two tokens (a third is optional):
    - **chill.institute**: chill.institute/auth/chilly-token
    - **put.io**: app.put.io/oauth → create an app → key icon → *OAuth token*
+   - *Optional* **TMDB**: themoviedb.org → Settings → API → *API Read Access Token*.
+     Without it chill uses Cinemeta, a keyless catalog (weaker search, no recommendations).
 2. On the home server: `cp docker/.env.example docker/.env`, fill in the tokens, then
    `docker compose -f docker/compose.yml up -d` → http://&lt;server&gt;:7878
 3. On the TV (Developer Mode on, see [`documentation/webos.md`](documentation/webos.md)):

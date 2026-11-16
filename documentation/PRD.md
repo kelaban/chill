@@ -104,7 +104,7 @@ a 20 GB file takes ~5 min at 500 Mbps, ~27 min at 100 Mbps.
 
 | Service | Used for | Notes |
 |---|---|---|
-| **TMDB** API | The movie universe: discover, search, details, images, genres, recommendations, trailers | Free personal key. Attribution required in the UI. |
+| **TMDB** API (optional) | The movie universe: discover, search, details, images, genres, recommendations, trailers | Free personal key. Attribution required in the UI. Until a key is set, **Cinemeta** (Stremio's public IMDb-based catalog, no key) stands in. |
 | **OMDb** API | IMDb / Rotten Tomatoes / Metacritic ratings | Optional; cached aggressively. |
 | **chill.institute** v4 API | Release search with parsed `release_info`, indexer health, curated movie lists | Bearer token from `chilly auth login`'s token page. Be a good citizen: cache, low concurrency. |
 | **put.io** v2 API | Transfers, files, HLS/MP4 streaming, subtitles, quota, deletes | Our own put.io OAuth app/token. |

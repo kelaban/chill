@@ -42,6 +42,10 @@ export function tmdbClient(token: string): TmdbApi {
     movie(id) {
       return get<TmdbDetail>(`/movie/${id}`, { append_to_response: "credits,recommendations,release_dates" });
     },
+    async byImdb(imdbId) {
+      const r = await get<{ movie_results: TmdbMovie[] }>(`/find/${imdbId}`, { external_source: "imdb_id" });
+      return r.movie_results[0] ?? null;
+    },
     async genres() {
       return (await get<{ genres: { id: number; name: string }[] }>("/genre/movie/list")).genres;
     },

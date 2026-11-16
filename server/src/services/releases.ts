@@ -1,6 +1,6 @@
 import type { Availability } from "@chill/shared";
 import type { Ctx } from "../context.js";
-import { DEFAULT_DEVICE, DEFAULT_PROFILE, rank, type DeviceCaps, type QualityProfile, type Ranking } from "../domain/ranker.js";
+import { DEFAULT_DEVICE, DEFAULT_PROFILE, needsUpgrade, rank, type DeviceCaps, type QualityProfile, type Ranking } from "../domain/ranker.js";
 import { releaseLabel, type Release } from "../domain/release.js";
 import { getSetting } from "../db.js";
 import { ensureTitle } from "./catalog.js";
@@ -62,12 +62,14 @@ export function availability(ctx: Ctx, tmdbId: number): Availability {
     const pending = ctx.db.prepare("SELECT 1 FROM jobs WHERE type = 'releases.search' AND state IN ('queued','running') AND json_extract(payload_json, '$.tmdbId') = ?").get(tmdbId);
     return pending ? { state: "searching" } : { state: "unknown" };
   }
-  const t = ctx.db.prepare("SELECT title, original_title, year, imdb_id FROM titles WHERE tmdb_id = ?").get(tmdbId) as any;
-  if (!t) return { state: "unknown" };
-  const r = rank({ title: t.title, originalTitle: t.original_title, year: t.year, imdbId: t.imdb_id }, load(ctx, tmdbId), qualityProfile(ctx), deviceCaps(ctx));
+  const row = ctx.db.prepare("SELECT title, original_title, year, imdb_id, runtime_min FROM titles WHERE tmdb_id = ?").get(tmdbId) as any;
+  if (!row) return { state: "unknown" };
+  const r = rank({ title: row.title, originalTitle: row.original_title, year: row.year, imdbId: row.imdb_id, runtimeMin: row.runtime_min }, load(ctx, tmdbId), qualityProfile(ctx), deviceCaps(ctx));
   const top = r.instant[0];
   if (!top) return { state: "none" };
-  return { state: "available", instantLabel: releaseLabel(top.release), targetLabel: r.target[0] ? releaseLabel(r.target[0].release) : null, releases: r.instant.length };
+  const t = r.target[0];
+  const upgrade = t && needsUpgrade(top, t, qualityProfile(ctx), deviceCaps(ctx), row.runtime_min) ? t : null;
+  return { state: "available", instantLabel: releaseLabel(top.release), targetLabel: upgrade ? releaseLabel(upgrade.release) : null, releases: r.instant.length };
 }
 
 export function registerReleaseJobs(ctx: Ctx) {

@@ -41,7 +41,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   }
   const e = parsed.data;
   if (!e.CHILL_FAKE) {
-    const missing = (["TMDB_TOKEN", "CHILL_TOKEN", "PUTIO_TOKEN"] as const).filter((k) => !e[k]);
+    // TMDB is optional: without it the keyless Cinemeta catalog is used.
+    const missing = (["CHILL_TOKEN", "PUTIO_TOKEN"] as const).filter((k) => !e[k]);
     if (missing.length)
       throw new Error(`Missing ${missing.join(", ")}. Set them in .env (see docker/.env.example), or run with CHILL_FAKE=1 for the demo.`);
   }
@@ -54,6 +55,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     cacheDir: path.join(dataDir, "cache"),
     fake: e.CHILL_FAKE,
     tmdbToken: e.TMDB_TOKEN ?? "",
+    catalog: (e.TMDB_TOKEN ? "tmdb" : "cinemeta") as "tmdb" | "cinemeta",
     chillToken: e.CHILL_TOKEN ?? "",
     putioToken: e.PUTIO_TOKEN ?? "",
     putioFolder: e.PUTIO_FOLDER,

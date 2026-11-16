@@ -46,9 +46,10 @@ export function registerMirrorJobs(ctx: Ctx) {
       },
     });
 
-    // Verify: it must probe, and match the put.io copy's duration within 2%.
+    // Verify: it must probe, and match the put.io copy's *measured* duration
+    // within 2% (the catalog runtime is only an estimate, so never compare to it).
     const p = await probe(partial);
-    const ref = v.duration_s;
+    const ref = v.probe_json ? ((JSON.parse(v.probe_json) as { durationS?: number }).durationS ?? null) : null;
     if (!p.durationS || (ref && Math.abs(p.durationS - ref) / ref > 0.02 && !ctx.fake)) {
       await fs.promises.rm(partial, { force: true });
       throw new Error(`mirror verify failed: duration ${p.durationS} vs ${ref}`);

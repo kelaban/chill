@@ -2,6 +2,7 @@ import path from "node:path";
 import { chillClient } from "./adapters/chill.js";
 import { putioClient } from "./adapters/putio.js";
 import { tmdbClient } from "./adapters/tmdb.js";
+import { cinemetaClient, type IdStore } from "./adapters/cinemeta.js";
 import type { Services } from "./adapters/types.js";
 import type { Config } from "./config.js";
 import type { Ctx } from "./context.js";
@@ -46,7 +47,12 @@ export async function boot(cfg: Config, o: BootOptions = {}): Promise<Ctx> {
     svc = f;
     fake = { putio: f.putio, samples };
   } else {
-    svc = { tmdb: tmdbClient(cfg.tmdbToken), chill: chillClient(cfg.chillToken), putio: putioClient(cfg.putioToken) };
+    const ids: IdStore = {
+      imdbFor: (id) => (db.prepare("SELECT imdb_id FROM title_ids WHERE tmdb_id = ?").pluck().get(id) as string | undefined) ?? null,
+      remember: (id, imdb) => void db.prepare("INSERT INTO title_ids (tmdb_id, imdb_id) VALUES (?, ?) ON CONFLICT(tmdb_id) DO UPDATE SET imdb_id = excluded.imdb_id").run(id, imdb),
+    };
+    const catalog = cfg.catalog === "tmdb" ? tmdbClient(cfg.tmdbToken) : cinemetaClient(ids);
+    svc = { tmdb: catalog, chill: chillClient(cfg.chillToken), putio: putioClient(cfg.putioToken) };
   }
   const ctx: Ctx = { cfg, db, svc, jobs: new Jobs(db, clock), bus: new EventBus(), clock, fake, selfBase };
   registerReleaseJobs(ctx);

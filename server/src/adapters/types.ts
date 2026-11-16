@@ -22,6 +22,7 @@ export interface TmdbDetail extends TmdbMovie {
   genres: { id: number; name: string }[];
   tagline?: string | null;
   imdb_id: string | null;
+  original_language?: string | null;
   credits?: { cast: { name: string; character?: string }[]; crew: { name: string; job: string }[] };
   recommendations?: { results: TmdbMovie[] };
   release_dates?: { results: { iso_3166_1: string; release_dates: { certification: string; type: number }[] }[] };
@@ -43,6 +44,8 @@ export interface TmdbApi {
   discover(p: DiscoverParams): Promise<{ results: TmdbMovie[]; totalPages: number }>;
   search(query: string, page?: number): Promise<TmdbMovie[]>;
   movie(id: number): Promise<TmdbDetail>;
+  /** Look a film up by IMDb id (e.g. from a chill.institute release). */
+  byImdb(imdbId: string): Promise<TmdbMovie | null>;
   genres(): Promise<{ id: number; name: string }[]>;
   /** Image bytes for the /img proxy. */
   image(size: string, path: string): Promise<{ body: Uint8Array; contentType: string }>;

@@ -26,6 +26,7 @@ export interface VariantRow {
   duration_s: number | null;
   label: string;
   edition: string | null;
+  probe_json: string | null;
   superseded_by: string | null;
   pinned: number;
   ready: number;

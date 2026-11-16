@@ -57,9 +57,9 @@ describe("hard filters", () => {
 });
 
 describe("instant tier", () => {
-  it("prefers a well-seeded 1080p WEB-DL over a 4K with similar seeders", () => {
+  it("prefers a well-seeded 1080p WEB-DL over an SDR 4K with similar seeders", () => {
     const hd = rel({ resolution: "1080p", seeders: 200, size: 5e9 });
-    const uhd = rel({ resolution: "2160p", hdr: "HDR10", codec: "x265", seeders: 200, size: 14e9 });
+    const uhd = rel({ resolution: "2160p", codec: "x265", seeders: 200, size: 14e9 });
     expect(rank(HEAT, [uhd, hd]).instant[0]?.release.id).toBe(hd.id);
   });
   it("seeders dominate: a 720p with 10× the seeders beats a dead 1080p", () => {
@@ -67,12 +67,22 @@ describe("instant tier", () => {
     const alive = rel({ resolution: "720p", seeders: 400, size: 2.5e9 });
     expect(rank(HEAT, [dead, alive]).instant[0]?.release.id).toBe(alive.id);
   });
-  it("matching the target's dynamic range breaks ties but never beats a doubling of seeders", () => {
-    const sdr = rel({ seeders: 100 });
+  it("prefers the upgrade's picture type over a few doublings of seeders, but not a poorly seeded match", () => {
+    // The expected upgrade is a 2160p HDR10 copy.
+    const upgrade = rel({ resolution: "2160p", hdr: "HDR10", codec: "x265", size: 20e9, seeders: 60 });
     const hdr = rel({ seeders: 100, hdr: "HDR10", codec: "x265" });
-    expect(rank(HEAT, [sdr, hdr]).instant[0]?.release.id).toBe(hdr.id);
-    const sdrBusy = rel({ seeders: 210 });
-    expect(rank(HEAT, [hdr, sdrBusy]).instant[0]?.release.id).toBe(sdrBusy.id);
+    const sdrBusy = rel({ seeders: 600 });
+    expect(rank(HEAT, [upgrade, hdr, sdrBusy]).instant[0]?.release.id).toBe(hdr.id);
+    const hdrDead = rel({ seeders: 20, hdr: "HDR10", codec: "x265" });
+    expect(rank(HEAT, [upgrade, hdrDead, sdrBusy]).instant[0]?.release.id).toBe(sdrBusy.id);
+    // Past ~200 seeders more don't help (put.io has popular releases cached).
+    const sdrHuge = rel({ seeders: 5000 });
+    expect(rank(HEAT, [upgrade, hdr, sdrHuge]).instant[0]?.release.id).toBe(hdr.id);
+  });
+  it("never treats a starved 4K encode as an upgrade", () => {
+    const starved = rel({ resolution: "2160p", hdr: "DV", size: 5.5e9, seeders: 31 });
+    expect(rank({ ...HEAT, runtimeMin: 139 }, [starved]).target).toHaveLength(0);
+    expect(rank({ ...HEAT, runtimeMin: 139 }, [{ ...starved, id: "big", sizeBytes: 9e9 }]).target).toHaveLength(1);
   });
   it("penalizes unverified audio (TrueHD) for the instant pick", () => {
     const truehd = rel({ audio: "TrueHD Atmos", seeders: 150 });

@@ -1,5 +1,6 @@
 import type { HomeResponse, Row, TitleDetail, TitleSummary } from "@chill/shared";
 import type { DiscoverParams, TmdbDetail, TmdbList, TmdbMovie } from "../adapters/types.js";
+import { normalizeTitle } from "../domain/release.js";
 import type { Ctx } from "../context.js";
 import { cached } from "../db.js";
 import type { TitleFacts } from "../domain/ranker.js";
@@ -41,14 +42,38 @@ export async function genres(ctx: Ctx) {
   return cached(ctx.db, "tmdb:genres", 7 * 24 * H, ctx.clock.now(), () => ctx.svc.tmdb.genres());
 }
 
+/**
+ * Films that chill.institute has releases for, matching the query: its search
+ * returns IMDb ids, which the catalog resolves. Finds what catalog search
+ * misses (Cinemeta's fuzzy search can't find "Sintel") and guarantees there is
+ * something to play. Cached 12 h per query, like every chill.institute search.
+ */
+async function titlesWithReleases(ctx: Ctx, query: string): Promise<TmdbMovie[]> {
+  if (query.length < 3) return [];
+  const imdbIds = await cached(ctx.db, `chill:titles:${query.toLowerCase()}`, 12 * H, ctx.clock.now(), async () => {
+    const rs = await ctx.svc.chill.search(query);
+    const seen = new Map<string, number>();
+    for (const r of rs) if (r.imdbId) seen.set(r.imdbId, (seen.get(r.imdbId) ?? 0) + r.seeders);
+    return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id]) => id);
+  }).catch(() => [] as string[]);
+  const found = await Promise.all(imdbIds.map((id) => cached(ctx.db, `catalog:imdb:${id}`, 7 * 24 * H, ctx.clock.now(), () => ctx.svc.tmdb.byImdb(id)).catch(() => null)));
+  return found.filter((m): m is TmdbMovie => !!m);
+}
+
 export async function search(ctx: Ctx, q: string): Promise<TitleSummary[]> {
   const query = q.trim();
   if (!query) return [];
-  const xs = await cached(ctx.db, `tmdb:search:${query.toLowerCase()}`, H, ctx.clock.now(), () => ctx.svc.tmdb.search(query));
-  const results = xs
-    .filter((m) => m.poster_path)
-    .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
-    .map(toSummary);
+  const [fromCatalog, fromReleases] = await Promise.all([
+    cached(ctx.db, `tmdb:search:${query.toLowerCase()}`, H, ctx.clock.now(), () => ctx.svc.tmdb.search(query)).catch(() => [] as TmdbMovie[]),
+    titlesWithReleases(ctx, query),
+  ]);
+  // Keep the providers' relevance order; exact title matches first, then films
+  // with releases, then the rest. De-duplicated by id.
+  const nq = normalizeTitle(query);
+  const exact = (m: TmdbMovie) => normalizeTitle(m.title) === nq;
+  const merged = new Map<number, TmdbMovie>();
+  for (const m of [...fromReleases.filter(exact), ...fromCatalog.filter(exact), ...fromReleases, ...fromCatalog]) if (!merged.has(m.id)) merged.set(m.id, m);
+  const results = [...merged.values()].filter((m) => m.poster_path).map(toSummary);
   // Pre-warm release search for the likeliest picks, so their detail pages
   // already know whether something is playable. Cached 12 h; low priority.
   for (const r of results.slice(0, 3)) ctx.jobs.enqueue("releases.search", { tmdbId: r.tmdbId }, { dedupeKey: `releases.search:${r.tmdbId}`, delayMs: 500 });
@@ -70,7 +95,7 @@ export async function ensureTitle(ctx: Ctx, tmdbId: number): Promise<{ facts: Ti
       id: tmdbId, imdb: detail.imdb_id, title: detail.title, orig: detail.original_title ?? null, year, runtime: detail.runtime,
       poster: detail.poster_path, backdrop: detail.backdrop_path, json: JSON.stringify(toSummary(detail)), now: ctx.clock.now(),
     });
-  return { facts: { title: detail.title, originalTitle: detail.original_title, year, imdbId: detail.imdb_id }, detail };
+  return { facts: { title: detail.title, originalTitle: detail.original_title, year, imdbId: detail.imdb_id, runtimeMin: detail.runtime, originalLanguage: detail.original_language ?? null }, detail };
 }
 
 export function titleRow(ctx: Ctx, tmdbId: number) {

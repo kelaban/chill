@@ -2,12 +2,12 @@ import type { PlayStatus, StreamInfo } from "@chill/shared";
 import type { PutioFile } from "../adapters/types.js";
 import { newId, putioFolder, type Ctx } from "../context.js";
 import { mapPosition, selectVariant, type PlayableVariant } from "../domain/playback.js";
-import { isBetter, meetsTarget, type Scored } from "../domain/ranker.js";
+import { needsUpgrade, type Scored } from "../domain/ranker.js";
 import { factsOf, releaseLabel } from "../domain/release.js";
 import { PermanentError } from "../jobs.js";
 import { log } from "../log.js";
 import { ensureTitle, watchState } from "./catalog.js";
-import { qualityProfile, ranking, releaseById } from "./releases.js";
+import { deviceCaps, qualityProfile, ranking, releaseById } from "./releases.js";
 import { admitAndMakeRoom, isPlaying, publishStorage, variant, variantsFor, type VariantRow } from "./storage.js";
 
 export interface AcqRow {
@@ -162,8 +162,8 @@ async function planTarget(ctx: Ctx, tmdbId: number, instantPick: Scored | null) 
   const excluded = excludedReleases(ctx, tmdbId);
   const target = r.target.find((s) => !excluded.has(s.release.id));
   if (!target) return;
-  if (instantPick && (instantPick.release.id === target.release.id || meetsTarget(instantPick, qualityProfile(ctx)))) return;
-  if (instantPick && !isBetter(instantPick.facts, target.facts)) return;
+  const runtime = ctx.db.prepare("SELECT runtime_min FROM titles WHERE tmdb_id = ?").pluck().get(tmdbId) as number | null;
+  if (instantPick && !needsUpgrade(instantPick, target, qualityProfile(ctx), deviceCaps(ctx), runtime)) return;
   const have = variantsFor(ctx, tmdbId).find((v) => v.release_id === target.release.id);
   if (have) return;
   const id = create(ctx, tmdbId, "target", "queued", { release_id: target.release.id });

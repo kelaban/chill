@@ -30,7 +30,7 @@ Not affiliated with chill.institute; it's an API we call.
 
 | Path | Contents |
 |---|---|
-| `server/src/adapters/` | `tmdb`, `omdb`, `chill`, `putio` — thin typed clients, nothing else |
+| `server/src/adapters/` | `tmdb` or `cinemeta` (keyless, default without a TMDB token), `chill`, `putio` — thin typed clients |
 | `server/src/domain/` | Pure logic: `ranker`, `storage`, `selectVariant`, position mapping |
 | `server/src/services/` | Catalog, releases, acquirer (Play + race), mirror, upgrade (seamless prep), storage |
 | `server/src/fakes/` | Fake TMDB / chill.institute / put.io + generated sample films (demo mode, tests) |
@@ -48,7 +48,7 @@ Not affiliated with chill.institute; it's an API we call.
 |---|---|
 | Dev (demo mode without tokens) | `npm run dev` |
 | Typecheck / tests / e2e | `npm run typecheck` · `npm test` · `npm run test:e2e` |
-| Live API smoke tests | `npm run test:live` (skips without tokens) |
+| Live API smoke tests | `CHILL_TOKEN=proxy-injected PUTIO_TOKEN=proxy-injected npm run test:live` (in the cloud env the proxy injects the real tokens) |
 | Build + bundle check | `npm run build && npm run check:bundle` |
 | TV package | `CHILL_URL=http://<server>:7878 npm run webos:package` |
 
