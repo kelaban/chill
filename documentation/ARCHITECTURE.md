@@ -248,7 +248,12 @@ GET    /img/:size/:path              TMDB image proxy with a disk cache
   `GET /v2/files/list`, `GET /v2/files/:id/url`, `GET /v2/files/:id/hls/media.m3u8`,
   `POST|GET /v2/files/:id/mp4`, `GET /v2/files/:id/subtitles`,
   `POST /v2/files/delete`, `GET /v2/account/info` (disk quota).
-- **TMDB v3**: `/trending`, `/movie/popular|top_rated|now_playing|upcoming`,
+- **Catalog gate** (`adapters/catalogGate.ts`): TMDB answers only while
+  `TMDB_TOKEN` is set *and* the key works (checked at boot, re-checked every
+  15 min while it doesn't, dropped on any 401/403); otherwise Cinemeta does, and
+  the TMDB-only features (`ctx.catalog.tmdb`) stay off. Catalog caches are keyed
+  by the answering catalog. DECISIONS D46.
+- **TMDB v3**: `/authentication` (key check), `/trending`, `/movie/popular|top_rated|now_playing|upcoming`,
   `/discover/movie`, `/search/movie`, `/movie/:id?append_to_response=credits,videos,images,release_dates,recommendations,external_ids`, `/genre/movie/list`.
 
 ## TV delivery

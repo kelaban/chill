@@ -1,6 +1,7 @@
 import type { Config } from "./config.js";
 import type { DB } from "./db.js";
 import type { Services } from "./adapters/types.js";
+import type { CatalogGate } from "./adapters/catalogGate.js";
 import type { EventBus } from "./events.js";
 import type { Clock, Jobs } from "./jobs.js";
 import type { FakePutio } from "./fakes/services.js";
@@ -11,6 +12,8 @@ export interface Ctx {
   cfg: Config;
   db: DB;
   svc: Services;
+  /** Which catalog answers, and whether TMDB-only features may run (TMDB_TOKEN set and the key works). */
+  catalog: CatalogGate;
   jobs: Jobs;
   bus: EventBus;
   clock: Clock;

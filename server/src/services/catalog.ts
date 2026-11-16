@@ -9,6 +9,9 @@ import { episodeRow, isEpisode, showRow } from "./shows.js";
 
 const H = 3_600_000;
 
+/** Cache keys carry the answering catalog, so a switch to (or away from) TMDB never serves the other's answers. */
+const src = (ctx: Ctx) => ctx.catalog.source();
+
 const yearOf = (d?: string) => (d && /^\d{4}/.test(d) ? Number(d.slice(0, 4)) : null);
 
 export function toSummary(m: TmdbMovie): TitleSummary {
@@ -30,17 +33,17 @@ function readySet(ctx: Ctx): Set<number> {
 const withReady = (xs: TitleSummary[], ready: Set<number>) => xs.map((x) => (ready.has(x.tmdbId) ? { ...x, ready: true } : x));
 
 export async function list(ctx: Ctx, kind: TmdbList, page = 1): Promise<TitleSummary[]> {
-  const xs = await cached(ctx.db, `tmdb:list:${kind}:${page}`, 6 * H, ctx.clock.now(), () => ctx.svc.tmdb.list(kind, page));
+  const xs = await cached(ctx.db, `${src(ctx)}:list:${kind}:${page}`, 6 * H, ctx.clock.now(), () => ctx.svc.tmdb.list(kind, page));
   return xs.map(toSummary);
 }
 
 export async function discover(ctx: Ctx, p: DiscoverParams): Promise<{ results: TitleSummary[]; totalPages: number }> {
-  const r = await cached(ctx.db, `tmdb:discover:${JSON.stringify(p)}`, 6 * H, ctx.clock.now(), () => ctx.svc.tmdb.discover(p));
+  const r = await cached(ctx.db, `${src(ctx)}:discover:${JSON.stringify(p)}`, 6 * H, ctx.clock.now(), () => ctx.svc.tmdb.discover(p));
   return { results: withReady(r.results.map(toSummary), readySet(ctx)), totalPages: r.totalPages };
 }
 
 export async function genres(ctx: Ctx) {
-  return cached(ctx.db, "tmdb:genres", 7 * 24 * H, ctx.clock.now(), () => ctx.svc.tmdb.genres());
+  return cached(ctx.db, `${src(ctx)}:genres`, 7 * 24 * H, ctx.clock.now(), () => ctx.svc.tmdb.genres());
 }
 
 /**
@@ -57,7 +60,7 @@ async function titlesWithReleases(ctx: Ctx, query: string): Promise<TmdbMovie[]>
     for (const r of rs) if (r.imdbId) seen.set(r.imdbId, (seen.get(r.imdbId) ?? 0) + r.seeders);
     return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id]) => id);
   }).catch(() => [] as string[]);
-  const found = await Promise.all(imdbIds.map((id) => cached(ctx.db, `catalog:imdb:${id}`, 7 * 24 * H, ctx.clock.now(), () => ctx.svc.tmdb.byImdb(id)).catch(() => null)));
+  const found = await Promise.all(imdbIds.map((id) => cached(ctx.db, `${src(ctx)}:imdb:${id}`, 7 * 24 * H, ctx.clock.now(), () => ctx.svc.tmdb.byImdb(id)).catch(() => null)));
   return found.filter((m): m is TmdbMovie => !!m);
 }
 
@@ -65,7 +68,7 @@ export async function search(ctx: Ctx, q: string): Promise<TitleSummary[]> {
   const query = q.trim();
   if (!query) return [];
   const [fromCatalog, fromReleases] = await Promise.all([
-    cached(ctx.db, `tmdb:search:${query.toLowerCase()}`, H, ctx.clock.now(), () => ctx.svc.tmdb.search(query)).catch(() => [] as TmdbMovie[]),
+    cached(ctx.db, `${src(ctx)}:search:${query.toLowerCase()}`, H, ctx.clock.now(), () => ctx.svc.tmdb.search(query)).catch(() => [] as TmdbMovie[]),
     titlesWithReleases(ctx, query),
   ]);
   // Keep the providers' relevance order; exact title matches first, then films
@@ -84,7 +87,7 @@ export async function search(ctx: Ctx, q: string): Promise<TitleSummary[]> {
 /** TMDB detail, cached 7 d, and mirrored into `titles` for the ranker and naming. */
 export async function ensureTitle(ctx: Ctx, tmdbId: number): Promise<{ facts: TitleFacts; detail: TmdbDetail }> {
   if (isEpisode(tmdbId)) return episodeTitle(ctx, tmdbId);
-  const detail = await cached(ctx.db, `tmdb:movie:${tmdbId}`, 7 * 24 * H, ctx.clock.now(), () => ctx.svc.tmdb.movie(tmdbId));
+  const detail = await cached(ctx.db, `${src(ctx)}:movie:${tmdbId}`, 7 * 24 * H, ctx.clock.now(), () => ctx.svc.tmdb.movie(tmdbId));
   const year = yearOf(detail.release_date);
   ctx.db
     .prepare(

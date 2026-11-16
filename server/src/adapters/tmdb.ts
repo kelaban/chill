@@ -5,7 +5,7 @@ const API = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p";
 
 /** TMDB v3 with a v4 Read Access Token (Bearer). Caching is the caller's job. */
-export function tmdbClient(token: string): TmdbApi {
+export function tmdbClient(token: string): TmdbApi & { verify(): Promise<void> } {
   const get = <T>(path: string, q: Record<string, string | number | undefined> = {}) => {
     const u = new URL(API + path);
     u.searchParams.set("language", "en-US");
@@ -20,6 +20,13 @@ export function tmdbClient(token: string): TmdbApi {
     upcoming: "/movie/upcoming",
   };
   return {
+    /** Throws HttpError 401 when the key is wrong (TMDB's own key check). */
+    async verify() {
+      const r = await httpJson<{ success?: boolean }>(`${API}/authentication`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, what: "TMDB /authentication", timeoutMs: 8000,
+      });
+      if (!r.success) throw new Error("TMDB /authentication did not succeed");
+    },
     async list(kind, page = 1) {
       return (await get<{ results: TmdbMovie[] }>(LIST_PATH[kind], { page })).results;
     },

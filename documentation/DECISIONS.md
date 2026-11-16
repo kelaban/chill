@@ -5,10 +5,10 @@
 > table with the evidence. Newest first within each section.
 
 Built 2026-11-16 without the TV or the home server (home testing is tabled).
-chill.institute and put.io tokens are configured and tested live; TMDB is
-skipped for now (Cinemeta stands in). Open items wait on:
+chill.institute, put.io and (since 2026-11-16) TMDB tokens are configured and
+tested live. TMDB is used only while its key works; Cinemeta stands in otherwise. Open items wait on:
 
-- **🔑 keys**: a TMDB token (optional) or an OMDb key.
+- **🔑 keys**: an OMDb key.
 - **📺 TV**: Phase 0's codec / handoff harness on the G3.
 - **🏠 home**: the server running for real for a few weeks.
 
@@ -43,6 +43,7 @@ skipped for now (Cinemeta stands in). Open items wait on:
 | D43 | **No season packs**: each episode is its own put.io transfer; the next episode is prefetched halfway through the current one | Simpler mapping (one transfer → one episode); binge-watching still starts instantly | If chill.institute often has only packs for a show (old seasons), add packs: one transfer, files matched to episodes | 🏠 |
 | D44 | **TV metadata comes from chill.institute** (`GetTVShows` rows by service, `GetTVShowDetail`, `GetTVShowSeason`, `GetTVShowEpisodeDownload`), shapes from `chill-contracts` v4 — not exercised live (S12). Show search uses Cinemeta's keyless series catalog | No new key; one cached call per row/show/season (6 h / 24 h) | First visit to TV Shows on farnsworth; or `LIVE_CHILL=1 npm run test:live` once, deliberately | 🏠 |
 | D45 | **An episode is a title with a negative id** (`-episodes.id`), so acquisitions, variants, watch state, subtitles and the home cache work unchanged. Episode titles carry the show's title (release names do) and no year | Keeps one pipeline; negative ids can't collide with TMDB's | If a TMDB key arrives, map episodes to TMDB episode ids only if something needs them | — |
+| D46 | **TMDB is gated on the config *and* the key working.** `TMDB_TOKEN` set → the key is checked at boot (`/3/authentication`, 5 s cap). It works → TMDB catalog and TMDB-only features. Rejected (401/403) or unreachable → Cinemeta, TMDB features off, re-checked every 15 min; a 401 mid-flight switches over at once. Catalog caches are keyed by the answering catalog, so neither ever serves the other's answers | A bad or revoked key should degrade to the keyless catalog, not break Home. Both catalogs use TMDB ids, so switching loses no watch state. Images route by their path (`/mh/…` is Cinemeta's), so posters cached under either keep loading | If TMDB outages are common, keep a stale TMDB answer instead of switching catalogs | 🏠 |
 | D31 | Upgrades into or out of a compat stream wait for a pause/seek (no frame-exact switch on compat) | Compat is mainly a laptop path; the G3 decodes AC3/E-AC3/DTS natively | If the TV needs compat often (TrueHD?), make the handoff offset-aware | 📺 |
 | D24 | No OMDb; ratings are IMDb's (via Cinemeta) or TMDB's | Phase 3 | Needs an OMDb key for Rotten Tomatoes / Metacritic | 🔑 |
 | D25 | **Catalog = Cinemeta** (keyless) until a TMDB token is set; ids stay TMDB ids via Cinemeta's `moviedb_id` | You skipped TMDB for now. Cinemeta's search is weak (can't find "Sintel"), it has no recommendations or certifications, and "Top Rated" is really "Featured" | Add `TMDB_TOKEN` and the catalog switches automatically; no migration | 🔑 |

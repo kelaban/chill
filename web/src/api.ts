@@ -28,6 +28,14 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return (await res.json()) as T;
 }
 
+/** Which catalog answers: TMDB only when its key is configured and works; Cinemeta otherwise. */
+export interface Health {
+  ok: boolean;
+  fake: boolean;
+  catalog: "tmdb" | "cinemeta" | "fake";
+  tmdb: { state: "off" | "checking" | "ok" | "rejected" | "unreachable"; checkedAt: string | null };
+}
+
 export const api = {
   profiles: () => req<Profile[]>("GET", "/api/profiles"),
   addProfile: (name: string, color: string) => req<Profile>("POST", "/api/profiles", { name, color }),
@@ -56,7 +64,7 @@ export const api = {
   prefetch: (id: number) => req<PlayStatus>("POST", `/api/titles/${id}/prefetch`),
   pin: (variantId: string, pinned: boolean) => req("POST", `/api/variants/${variantId}/pin`, { pinned }),
   evict: (variantId: string) => req("POST", `/api/variants/${variantId}/evict`),
-  health: () => req<{ ok: boolean; fake: boolean }>("GET", "/api/health"),
+  health: () => req<Health>("GET", "/api/health"),
 };
 
 export function progress(body: { tmdbId: number; variantId: string; positionS: number; durationS: number; event: "heartbeat" | "pause" | "seek" | "stop" | "end" }) {

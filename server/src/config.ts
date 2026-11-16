@@ -58,7 +58,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     cacheDir: path.join(dataDir, "cache"),
     fake: e.CHILL_FAKE,
     tmdbToken: e.TMDB_TOKEN ?? "",
-    catalog: (e.TMDB_TOKEN ? "tmdb" : "cinemeta") as "tmdb" | "cinemeta",
     chillToken: e.CHILL_TOKEN ?? "",
     putioToken: e.PUTIO_TOKEN ?? "",
     putioFolder: e.PUTIO_FOLDER,

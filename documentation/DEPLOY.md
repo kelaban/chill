@@ -114,8 +114,11 @@ Self-update and rebuilds only pick up **pushed** commits. Fresh clone:
 default branch; `-b main` just makes it explicit). The clone is
 anonymous HTTPS (the repo is publicly readable), so the host has no git credentials.
 
-A healthy `/api/health` looks like `{"ok":true,"fake":false,"catalog":"cinemeta"}`
-(`"tmdb"` once `TMDB_TOKEN` is set). `"fake":true` means demo mode is on, which is wrong for this host.
+A healthy `/api/health` looks like `{"ok":true,"fake":false,"catalog":"tmdb","tmdb":{"state":"ok",…}}`.
+`"catalog":"cinemeta"` means TMDB is off: `tmdb.state` says why — `off` (no
+`TMDB_TOKEN` in `.env`), `rejected` (TMDB refused the key: use the *API Read
+Access Token*, not the short API key), or `unreachable` (re-checked every 15 min).
+The About page shows the same. `"fake":true` means demo mode is on, which is wrong for this host.
 
 ## Verifying a build without touching real data
 

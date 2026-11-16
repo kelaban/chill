@@ -5,6 +5,7 @@ import { api, img, titleHref } from "../api";
 import { FocusGroup } from "../components/Focusable";
 import { Button, Page, PlayIcon, Row, Spinner, useInitialFocus } from "../components/ui";
 import { useServerEvents } from "../events";
+import { CatalogAttribution } from "../components/Attribution";
 
 export function Home() {
   const nav = useNavigate();
@@ -59,7 +60,9 @@ export function Home() {
       {data.rows.map((r) => (
         <Row key={r.id} row={r} onOpen={open} wide={r.id === "continue"} />
       ))}
-      <footer className="px-16 pt-8 text-sm text-white/40">Movie data and images from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</footer>
+      <footer className="px-16 pt-8 text-sm text-white/40">
+        <CatalogAttribution />
+      </footer>
     </Page>
   );
 }
