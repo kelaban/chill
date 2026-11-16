@@ -66,7 +66,9 @@ All commands run on the host in `~/apps/chill`. From the laptop, wrap with
 | Edit config | `nano .env` then `docker compose up -d` (re-creates the container with the new env) |
 | Clean old images | `docker image prune -f` (after a few rebuilds) |
 
-Deploys only pick up **pushed** commits: push to GitHub first. The clone is
+Deploys only pick up **pushed** commits: push to GitHub first. The repo's GitHub
+*default* branch is not `main`, so a fresh clone needs `-b main`:
+`git clone -b main https://github.com/kelaban/chill src`. The clone is
 anonymous HTTPS (the repo is publicly readable), so the host has no git credentials.
 
 A healthy `/api/health` looks like `{"ok":true,"fake":false,"catalog":"cinemeta"}`
