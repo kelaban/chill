@@ -1,5 +1,5 @@
 # On the home server:
-#   cp docker/.env.example docker/.env   # fill in the three tokens
+#   cp docker/.env.example docker/.env   # fill in CHILL_TOKEN and PUTIO_TOKEN (TMDB optional)
 #   docker compose -f docker/compose.yml up -d
 # Demo (no tokens): touch docker/.env && CHILL_FAKE=1 docker compose -f docker/compose.yml up -d
 services:
