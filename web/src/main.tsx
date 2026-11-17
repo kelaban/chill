@@ -15,6 +15,7 @@ import { MyList } from "./pages/MyList";
 import { Profiles } from "./pages/Profiles";
 import { Search } from "./pages/Search";
 import { Watch } from "./pages/Watch";
+import { Person } from "./pages/Person";
 import { Show } from "./pages/Show";
 import { Shows } from "./pages/Shows";
 
@@ -87,6 +88,7 @@ function Shell() {
       <Route path="/watch/:id" element={<WatchKeyed />} />
       <Route path="/shows" element={<Shows />} />
       <Route path="/show/:imdb" element={<Show />} />
+      <Route path="/person/:id" element={<Person />} />
       <Route path="/downloads" element={<Downloads />} />
       <Route path="/about" element={<About />} />
       <Route path="*" element={<Navigate to="/" replace />} />

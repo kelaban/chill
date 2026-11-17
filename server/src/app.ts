@@ -86,6 +86,11 @@ export function createApp(ctx: Ctx) {
     );
   });
   app.get("/api/search", async (c) => c.json(await catalog.search(ctx, c.req.query("q") ?? "")));
+  app.get("/api/search/people", async (c) => c.json(await catalog.searchPeople(ctx, c.req.query("q") ?? "")));
+  app.get("/api/people/:id", async (c) => {
+    const p = await catalog.person(ctx, Number(c.req.param("id")));
+    return p ? c.json(p) : c.json({ error: "people need TMDB (no key, or it isn't working)" }, 404);
+  });
   app.get("/api/titles/:id", async (c) => c.json(await catalog.detail(ctx, Number(c.req.param("id")), profileOf(c))));
   app.get("/api/titles/:id/availability", (c) => c.json(availability(ctx, Number(c.req.param("id")))));
   app.get("/api/titles/:id/releases", async (c) => {

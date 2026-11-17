@@ -1,5 +1,5 @@
 import type {
-  Availability, EpisodeItem, HomeResponse, PlayStatus, Profile, Row, ShowDetail, StorageReport, TitleDetail, TitleSummary, TrickplayManifest, UpgradeReady,
+  Availability, EpisodeItem, HomeResponse, PlayStatus, Profile, Row, ShowDetail, StorageReport, TitleDetail, PersonDetail, PersonSummary, TitleSummary, TrickplayManifest, UpgradeReady,
 } from "@chill/shared";
 
 export function profileId(): number {
@@ -61,6 +61,9 @@ export const api = {
   shows: () => req<{ rows: Row[] }>("GET", "/api/shows"),
   show: (imdb: string) => req<ShowDetail>("GET", `/api/shows/${imdb}`),
   season: (imdb: string, n: number) => req<EpisodeItem[]>("GET", `/api/shows/${imdb}/seasons/${n}`),
+  /** People matching a search (TMDB only; empty otherwise). */
+  searchPeople: (q: string) => req<PersonSummary[]>("GET", `/api/search/people?q=${encodeURIComponent(q)}`),
+  person: (id: number) => req<PersonDetail>("GET", `/api/people/${id}`),
   searchShows: (q: string) => req<TitleSummary[]>("GET", `/api/shows/search?q=${encodeURIComponent(q)}`),
   next: (id: number) => req<{ tmdbId: number; season: number; episode: number; name: string } | null>("GET", `/api/titles/${id}/next`),
   prefetch: (id: number) => req<PlayStatus>("POST", `/api/titles/${id}/prefetch`),

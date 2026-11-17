@@ -1,4 +1,4 @@
-import type { Row as RowT, TitleSummary } from "@chill/shared";
+import type { PersonSummary, Row as RowT, TitleSummary } from "@chill/shared";
 import { setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -61,6 +61,24 @@ export function Card({ t, onEnter, focusKey, wide, fill }: { t: TitleSummary; on
           )}
         </>
       )}
+    </Focusable>
+  );
+}
+
+/** A person in search results: round photo (or initials), name, what they're known for. */
+export function PersonCard({ p, onEnter }: { p: PersonSummary; onEnter: () => void }) {
+  const initials = p.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("");
+  return (
+    <Focusable onEnter={onEnter} testId={`person-${p.id}`} label={p.name} className="focus-pop flex flex-col items-center gap-3 rounded-xl p-3 text-center" focusedClassName="is-focused bg-white/10">
+      <div className="h-40 w-40 overflow-hidden rounded-full bg-ink-3">
+        {p.photoPath ? (
+          <img src={img("w185", p.photoPath)} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full items-center justify-center text-5xl font-bold text-white/60">{initials}</div>
+        )}
+      </div>
+      <div className="text-xl font-bold leading-tight">{p.name}</div>
+      <div className="text-base text-white/60">{p.department === "Directing" ? "Director" : p.department === "Acting" ? "Actor" : (p.department ?? "")}</div>
     </Focusable>
   );
 }

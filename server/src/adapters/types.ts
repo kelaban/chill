@@ -44,6 +44,25 @@ export interface TmdbWatchProviders {
   buy?: TmdbProvider[];
 }
 
+export interface TmdbPerson {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  known_for_department?: string | null;
+  popularity?: number;
+  known_for?: { media_type?: string; title?: string; name?: string }[];
+}
+
+/** A film in someone's credits: the movie plus their part in it. */
+export interface TmdbCredit extends TmdbMovie {
+  job?: string;
+  character?: string;
+}
+
+export interface TmdbPersonDetail extends TmdbPerson {
+  movie_credits: { cast: TmdbCredit[]; crew: TmdbCredit[] };
+}
+
 export type TmdbList = "trending" | "popular" | "top_rated" | "now_playing" | "upcoming";
 
 export interface DiscoverParams {
@@ -65,6 +84,10 @@ export interface TmdbApi {
   /** Series search, when the catalog has one (Cinemeta does; TMDB would need its own call). */
   searchShows?(query: string): Promise<TvShowInfo[]>;
   genres(): Promise<{ id: number; name: string }[]>;
+  /** TMDB only: people search (empty when TMDB is off). */
+  searchPeople?(query: string): Promise<TmdbPerson[]>;
+  /** TMDB only: a person and their film credits (null when TMDB is off). */
+  person?(id: number): Promise<TmdbPersonDetail | null>;
   /** TMDB only: where a film streams in a country (null when TMDB has no entry, or is off). */
   watchProviders?(tmdbId: number, region: string): Promise<TmdbWatchProviders | null>;
   /** Image bytes for the /img proxy. */

@@ -126,6 +126,22 @@ try {
   });
   check(order.movies < order.shows, `movies come before TV shows in search (movies at ${Math.round(order.movies)}px, shows at ${Math.round(order.shows)}px)`);
 
+  console.log("search by people");
+  await page.goto(`${base}/search?q=denis%20villeneuve`);
+  await page.waitForSelector("[data-testid=people-results] [data-testid^=person-]");
+  const firstFilm = await page.getAttribute("[data-testid=search-results] [data-testid^=card-]", "data-testid");
+  check(["card-438631", "card-693134", "card-335984", "card-329865", "card-273481", "card-146233"].includes(firstFilm), `a director's name leads with their films (${firstFilm})`);
+  check((await page.textContent("[data-testid=people-results]")).includes("Denis Villeneuve"), "…and lists them under People");
+  check((await page.getAttribute("[data-testid=search-input]", "placeholder")) === "Titles or people", "the search box says it takes people");
+  await page.click("[data-testid=people-results] [data-testid^=person-]");
+  await page.waitForSelector("[data-testid=person-films] [data-testid^=card-]");
+  const filmCount = await page.locator("[data-testid=person-films] [data-testid^=card-]").count();
+  check((await page.textContent("[data-testid=person-name]")) === "Denis Villeneuve" && filmCount === 6, `the person page lists their ${filmCount} films`);
+  await page.screenshot({ path: path.join(out, "person.png") });
+  await page.click("[data-testid=person-films] [data-testid^=card-]");
+  await page.waitForSelector("[data-testid=detail-title]");
+  check(true, "a film opens from the person page");
+
   console.log("where it streams");
   await page.goto(`${base}/title/438631`);
   await page.waitForSelector("[data-testid=services]");

@@ -1,5 +1,6 @@
-import type { HomeResponse, ResumeHero, Row, TitleDetail, TitleSummary, WatchOn } from "@chill/shared";
-import type { DiscoverParams, TmdbDetail, TmdbList, TmdbMovie } from "../adapters/types.js";
+import type { HomeResponse, PersonDetail, PersonSummary, ResumeHero, Row, TitleDetail, TitleSummary, WatchOn } from "@chill/shared";
+import type { DiscoverParams, TmdbDetail, TmdbList, TmdbMovie, TmdbPerson, TmdbPersonDetail } from "../adapters/types.js";
+import { filmography, nameMatch } from "../domain/people.js";
 import { normalizeTitle } from "../domain/release.js";
 import type { Ctx } from "../context.js";
 import { cached } from "../db.js";
@@ -69,21 +70,76 @@ async function titlesWithReleases(ctx: Ctx, query: string): Promise<TmdbMovie[]>
 export async function search(ctx: Ctx, q: string): Promise<TitleSummary[]> {
   const query = q.trim();
   if (!query) return [];
-  const [fromCatalog, fromReleases] = await Promise.all([
+  const [fromCatalog, fromReleases, person] = await Promise.all([
     cached(ctx.db, `${src(ctx)}:search:${query.toLowerCase()}`, H, ctx.clock.now(), () => ctx.svc.tmdb.search(query)).catch(() => [] as TmdbMovie[]),
     titlesWithReleases(ctx, query),
+    namedPerson(ctx, query),
   ]);
   // Keep the providers' relevance order; exact title matches first, then films
-  // with releases, then the rest. De-duplicated by id.
+  // with releases, then the rest. De-duplicated by id. A search that names a
+  // person ("denis villeneuve") leads with their films; one that only might
+  // ("villeneuve") puts them after the exact title matches.
   const nq = normalizeTitle(query);
   const exact = (m: TmdbMovie) => normalizeTitle(m.title) === nq;
+  const theirs = person?.films ?? [];
+  const order =
+    person?.match === "exact"
+      ? [...theirs, ...fromReleases.filter(exact), ...fromCatalog.filter(exact), ...fromReleases, ...fromCatalog]
+      : [...fromReleases.filter(exact), ...fromCatalog.filter(exact), ...theirs, ...fromReleases, ...fromCatalog];
   const merged = new Map<number, TmdbMovie>();
-  for (const m of [...fromReleases.filter(exact), ...fromCatalog.filter(exact), ...fromReleases, ...fromCatalog]) if (!merged.has(m.id)) merged.set(m.id, m);
+  for (const m of order) if (!merged.has(m.id)) merged.set(m.id, m);
   const results = [...merged.values()].filter((m) => m.poster_path).map(toSummary);
   // Pre-warm release search for the likeliest picks, so their detail pages
   // already know whether something is playable. Cached 12 h; low priority.
   for (const r of results.slice(0, 3)) ctx.jobs.enqueue("releases.search", { tmdbId: r.tmdbId }, { dedupeKey: `releases.search:${r.tmdbId}`, delayMs: 500 });
   return withReady(results, readySet(ctx));
+}
+
+// ---- people (TMDB only: Cinemeta has no people search)
+
+const today = (ctx: Ctx) => new Date(ctx.clock.now()).toISOString().slice(0, 10);
+
+async function peopleFor(ctx: Ctx, query: string): Promise<TmdbPerson[]> {
+  const find = ctx.svc.tmdb.searchPeople;
+  if (!ctx.catalog.tmdb || !find || query.length < 2) return [];
+  return cached(ctx.db, `${src(ctx)}:people:${query.toLowerCase()}`, 24 * H, ctx.clock.now(), () => find(query)).catch(() => [] as TmdbPerson[]);
+}
+
+async function personDetail(ctx: Ctx, id: number): Promise<TmdbPersonDetail | null> {
+  const get = ctx.svc.tmdb.person;
+  if (!ctx.catalog.tmdb || !get) return null;
+  return cached(ctx.db, `${src(ctx)}:person:${id}`, 7 * 24 * H, ctx.clock.now(), () => get(id)).catch(() => null);
+}
+
+/** People matching a search: those with a photo, or well known enough to matter. */
+export async function searchPeople(ctx: Ctx, q: string): Promise<PersonSummary[]> {
+  const people = await peopleFor(ctx, q.trim());
+  return people.filter((p) => p.profile_path || (p.popularity ?? 0) >= 1).slice(0, 6).map(personSummary);
+}
+
+const personSummary = (p: TmdbPerson): PersonSummary => ({
+  id: p.id, name: p.name, photoPath: p.profile_path, department: p.known_for_department ?? null,
+  knownFor: (p.known_for ?? []).map((k) => k.title ?? k.name ?? "").filter(Boolean).slice(0, 3),
+});
+
+/** The person a search names, if any, with their best-known films. */
+async function namedPerson(ctx: Ctx, query: string): Promise<{ match: "exact" | "partial"; films: TmdbMovie[] } | null> {
+  const people = await peopleFor(ctx, query);
+  // TMDB ranks by popularity; the first one the query actually names wins.
+  for (const p of people.slice(0, 5)) {
+    const match = nameMatch(p.name, query);
+    if (!match) continue;
+    const d = await personDetail(ctx, p.id);
+    if (!d) return null;
+    return { match, films: filmography(d.movie_credits, d.known_for_department, today(ctx), 20) };
+  }
+  return null;
+}
+
+export async function person(ctx: Ctx, id: number): Promise<PersonDetail | null> {
+  const d = await personDetail(ctx, id);
+  if (!d) return null;
+  return { ...personSummary(d), movies: withReady(filmography(d.movie_credits, d.known_for_department, today(ctx)).map(toSummary), readySet(ctx)) };
 }
 
 /** TMDB detail, cached 7 d, and mirrored into `titles` for the ranker and naming. */

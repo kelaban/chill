@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ChillApi, PutioApi, PutioFile, PutioTransfer, Services, TmdbApi, TmdbMovie, TmdbWatchProviders, TvShowInfo } from "../adapters/types.js";
+import type { ChillApi, PutioApi, PutioFile, PutioTransfer, Services, TmdbApi, TmdbCredit, TmdbMovie, TmdbWatchProviders, TvShowInfo } from "../adapters/types.js";
+import { nameMatch } from "../domain/people.js";
 import type { Release } from "../domain/release.js";
 import { normalizeTitle } from "../domain/release.js";
 import type { Clock } from "../jobs.js";
@@ -12,6 +13,20 @@ import { sampleSubtitles, SAMPLE_SECONDS, TARGET_LEAD_IN_S, type Samples } from 
 // integration tests exercise the same code paths as production.
 
 // ---------------------------------------------------------------- TMDB
+
+/** Demo-mode people: the fake catalog's directors, with the films they directed. */
+function fakePeople() {
+  const byName = new Map<string, TmdbCredit[]>();
+  for (const m of fakeMovies()) {
+    const d = fakeDetail(m.id);
+    const name = d?.credits?.crew.find((c) => c.job === "Director")?.name;
+    if (name && m.id !== FAKE_NO_RELEASES_ID) byName.set(name, [...(byName.get(name) ?? []), { ...m, job: "Director" }]);
+  }
+  return [...byName.entries()].map(([name, credits], i) => ({
+    id: 9_100_000 + i, name, profile_path: null, known_for_department: "Directing", popularity: credits.length, credits,
+    known_for: credits.slice(0, 3).map((c) => ({ media_type: "movie", title: c.title })),
+  }));
+}
 
 export function fakeTmdb(): TmdbApi {
   const all = fakeMovies().filter((m) => m.id !== FAKE_NO_RELEASES_ID);
@@ -57,6 +72,16 @@ export function fakeTmdb(): TmdbApi {
     async byImdb(imdbId) {
       const m = fakeMovies().find((x) => fakeDetail(x.id)?.imdb_id === imdbId);
       return m ?? null;
+    },
+    // People: each film's director (their credits are the films they directed).
+    async searchPeople(query) {
+      return fakePeople().filter((p) => nameMatch(p.name, query) || normalizeTitle(p.name).includes(normalizeTitle(query))).map(({ credits: _c, ...p }) => p);
+    },
+    async person(id) {
+      const p = fakePeople().find((x) => x.id === id);
+      if (!p) return null;
+      const { credits, ...rest } = p;
+      return { ...rest, movie_credits: { cast: [], crew: credits } };
     },
     async searchShows(query) {
       const n = normalizeTitle(query);

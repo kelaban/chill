@@ -253,6 +253,9 @@ GET    /img/:size/:path              TMDB image proxy with a disk cache
   `/api/trickplay/:variant/NNN.jpg`; `/api/stream/:variant/trickplay` maps any
   aligned copy onto them (`alignmentBetween`). Evicting a copy keeps its
   neighbours aligned (X→it→Y becomes X→Y). DECISIONS D49.
+- **People search** (TMDB only, D51): `/api/search/people`, `/api/people/:id`;
+  `/api/search` folds in the films of a person the query names
+  (`domain/people.ts`: `nameMatch`, `filmography`).
 - **Catalog gate** (`adapters/catalogGate.ts`): TMDB answers only while
   `TMDB_TOKEN` is set *and* the key works (checked at boot, re-checked every
   15 min while it doesn't, dropped on any 401/403); otherwise Cinemeta does, and

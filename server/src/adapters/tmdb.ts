@@ -1,5 +1,5 @@
 import { http, httpJson } from "../http.js";
-import type { DiscoverParams, TmdbApi, TmdbDetail, TmdbList, TmdbMovie, TmdbWatchProviders } from "./types.js";
+import type { DiscoverParams, TmdbApi, TmdbDetail, TmdbList, TmdbMovie, TmdbPerson, TmdbPersonDetail, TmdbWatchProviders } from "./types.js";
 
 const API = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p";
@@ -48,6 +48,12 @@ export function tmdbClient(token: string): TmdbApi & { verify(): Promise<void> }
     },
     movie(id) {
       return get<TmdbDetail>(`/movie/${id}`, { append_to_response: "credits,recommendations,release_dates" });
+    },
+    async searchPeople(query) {
+      return (await get<{ results: TmdbPerson[] }>("/search/person", { query, include_adult: "false" })).results;
+    },
+    person(id) {
+      return get<TmdbPersonDetail>(`/person/${id}`, { append_to_response: "movie_credits" });
     },
     async watchProviders(id, region) {
       const r = await get<{ results: Record<string, TmdbWatchProviders> }>(`/movie/${id}/watch/providers`);

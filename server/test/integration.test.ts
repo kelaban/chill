@@ -15,7 +15,7 @@ import { ensureSamples } from "../src/fakes/samples.js";
 import { fakeServices, type FakePutio } from "../src/fakes/services.js";
 import { setLogSink } from "../src/log.js";
 import { fixedGate } from "../src/adapters/catalogGate.js";
-import { home, watchOn } from "../src/services/catalog.js";
+import { home, person, searchPeople, watchOn } from "../src/services/catalog.js";
 
 // End to end through the HTTP API with fake TMDB / chill.institute / put.io,
 // real SQLite, real ffmpeg (alignment, cut detection, probe) and a real HTTP
@@ -384,6 +384,39 @@ describe("where a film streams", () => {
     const off = { ...ctx, catalog: fixedGate("cinemeta") };
     expect(await watchOn(off, 438631)).toBeNull();
     expect(await watchOn(ctx, 438631)).not.toBeNull();
+  });
+});
+
+describe("search by people (TMDB on)", () => {
+  const VILLENEUVE = [438631, 693134, 335984, 329865, 273481, 146233]; // Dune, Part Two, Blade Runner 2049, Arrival, Sicario, Prisoners
+  type P = { id: number; name: string; department: string | null; knownFor: string[] };
+
+  it("a full name leads the movie results with their films, and lists them under People", async () => {
+    const r = await api<{ tmdbId: number }[]>("GET", "/api/search?q=denis%20villeneuve");
+    expect(new Set(r.slice(0, 6).map((x) => x.tmdbId))).toEqual(new Set(VILLENEUVE));
+    const people = await api<P[]>("GET", "/api/search/people?q=denis%20villeneuve");
+    expect(people[0]).toMatchObject({ name: "Denis Villeneuve", department: "Directing" });
+    expect(people[0]!.knownFor.length).toBeGreaterThan(0);
+  });
+
+  it("a surname finds them too, after any exact title match", async () => {
+    const r = await api<{ tmdbId: number }[]>("GET", "/api/search?q=nolan");
+    expect(r.map((x) => x.tmdbId)).toEqual(expect.arrayContaining([27205, 157336, 155, 872585])); // Inception, Interstellar, The Dark Knight, Oppenheimer
+    const heat = await api<{ tmdbId: number }[]>("GET", "/api/search?q=heat");
+    expect(heat[0]!.tmdbId).toBe(HEAT); // a title search is still a title search
+  });
+
+  it("a person's page lists their films, best known first", async () => {
+    const [p] = await api<P[]>("GET", "/api/search/people?q=villeneuve");
+    const d = await api<P & { movies: { tmdbId: number }[] }>("GET", `/api/people/${p!.id}`);
+    expect(d.name).toBe("Denis Villeneuve");
+    expect(new Set(d.movies.map((m) => m.tmdbId))).toEqual(new Set(VILLENEUVE));
+  });
+
+  it("with TMDB off there are no people, and title search is unchanged", async () => {
+    const off = { ...ctx, catalog: fixedGate("cinemeta") };
+    expect(await searchPeople(off, "denis villeneuve")).toEqual([]);
+    expect(await person(off, 9_100_000)).toBeNull();
   });
 });
 

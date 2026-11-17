@@ -279,3 +279,18 @@ export interface TrickplayManifest {
   a: number;
   b: number;
 }
+
+/** A person from people search (TMDB only). */
+export interface PersonSummary {
+  id: number;
+  name: string;
+  photoPath: string | null;
+  /** "Directing", "Acting", "Writing", … */
+  department: string | null;
+  knownFor: string[];
+}
+
+export interface PersonDetail extends PersonSummary {
+  /** Films they directed (for directors) and acted in, best known first. */
+  movies: TitleSummary[];
+}

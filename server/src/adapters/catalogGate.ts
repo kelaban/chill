@@ -92,6 +92,20 @@ export function gatedCatalog(
     }) as NonNullable<TmdbApi[K]>;
   }
 
+  async function tmdbOnly<T>(call: () => Promise<T> | undefined, none: T): Promise<T> {
+    maybeRecheck();
+    if (state !== "ok") return none;
+    try {
+      return (await call()) ?? none;
+    } catch (e) {
+      if (!rejected(e)) throw e;
+      state = "rejected";
+      reason = (e as Error).message;
+      checkedAt = now();
+      return none;
+    }
+  }
+
   const api: TmdbApi = {
     list: route("list"),
     discover: route("discover"),
@@ -107,18 +121,9 @@ export function gatedCatalog(
     // TMDB has no series search here; Cinemeta's is keyless.
     ...(fallback.searchShows ? { searchShows: (q: string) => fallback.searchShows!(q) } : {}),
     // TMDB-only: when TMDB is off (or refuses mid-flight) the answer is "no data", never an error.
-    async watchProviders(id, region) {
-      if (state !== "ok" || !tmdb.watchProviders) return null;
-      try {
-        return await tmdb.watchProviders(id, region);
-      } catch (e) {
-        if (rejected(e)) {
-          state = "rejected";
-          checkedAt = now();
-        }
-        return null;
-      }
-    },
+    watchProviders: (id, region) => tmdbOnly(() => tmdb.watchProviders?.(id, region), null),
+    searchPeople: (q) => tmdbOnly(() => tmdb.searchPeople?.(q), []),
+    person: (id) => tmdbOnly(() => tmdb.person?.(id), null),
     // Images go wherever their path came from: Cinemeta's are "/mh/…", the rest
     // are TMDB's (image.tmdb.org needs no key, so they load even with a bad one).
     image(size, path) {
