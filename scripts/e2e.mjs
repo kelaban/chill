@@ -116,6 +116,16 @@ try {
   check(!(await page.evaluate(() => document.documentElement.classList.contains("pointer"))) && !(await page.$("[data-testid^=paddle-]:visible")), "a key press hides the pointer-only paddles");
   await page.screenshot({ path: path.join(out, "home-pointer.png") });
 
+  console.log("search");
+  await page.goto(`${base}/search?q=in`);
+  await page.waitForSelector("[data-testid=show-results] [data-testid^=card-]");
+  await page.waitForSelector("[data-testid=search-results] [data-testid^=card-]");
+  const order = await page.evaluate(() => {
+    const top = (sel) => document.querySelector(sel).getBoundingClientRect().top;
+    return { movies: top("[data-testid=search-results]"), shows: top("[data-testid=show-results]") };
+  });
+  check(order.movies < order.shows, `movies come before TV shows in search (movies at ${Math.round(order.movies)}px, shows at ${Math.round(order.shows)}px)`);
+
   console.log("where it streams");
   await page.goto(`${base}/title/438631`);
   await page.waitForSelector("[data-testid=services]");

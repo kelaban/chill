@@ -52,19 +52,8 @@ export function Search() {
         <div className="min-w-0 flex-1">
           {!debounced && <div className="pt-10 text-2xl text-white/50">Search every movie. chill finds a copy in the background.</div>}
           {debounced && !isFetching && data?.length === 0 && !shows.data?.length && <div className="pt-10 text-2xl text-white/60">Nothing matches "{debounced}".</div>}
-          {!!shows.data?.length && (
-            <>
-              <h2 className="mb-3 text-2xl font-bold text-white/80">TV shows</h2>
-              <FocusGroup focusKey="show-results" className="mb-8 grid grid-cols-5 gap-5" testId="show-results">
-                {shows.data.map((t) => (
-                  <div key={t.showId} data-row="show-results">
-                    <Card fill t={t} onEnter={() => nav(titleHref(t))} />
-                  </div>
-                ))}
-              </FocusGroup>
-              {!!data?.length && <h2 className="mb-3 text-2xl font-bold text-white/80">Movies</h2>}
-            </>
-          )}
+          {/* Movies first; TV shows after them. */}
+          {!!data?.length && !!shows.data?.length && <h2 className="mb-3 text-2xl font-bold text-white/80">Movies</h2>}
           <FocusGroup focusKey="results" className="grid grid-cols-5 gap-5 pb-10" testId="search-results">
             {data?.map((t) => (
               <div key={t.tmdbId} data-row="results">
@@ -72,6 +61,18 @@ export function Search() {
               </div>
             ))}
           </FocusGroup>
+          {!!shows.data?.length && (
+            <>
+              <h2 className="mb-3 text-2xl font-bold text-white/80">TV shows</h2>
+              <FocusGroup focusKey="show-results" className="grid grid-cols-5 gap-5 pb-10" testId="show-results">
+                {shows.data.map((t) => (
+                  <div key={t.showId} data-row="show-results">
+                    <Card fill t={t} onEnter={() => nav(titleHref(t))} />
+                  </div>
+                ))}
+              </FocusGroup>
+            </>
+          )}
         </div>
       </div>
     </Page>
